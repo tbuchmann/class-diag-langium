@@ -1,0 +1,15 @@
+{
+    "projectName": "ClassDiagram",
+    "languages": [{
+        "id": "class-diagram",
+        "grammar": "src/language/class-diagram.langium",
+        "fileExtensions": [".cdiag"],
+        "textMate": {
+            "out": "syntaxes/class-diagram.tmLanguage.json"
+        },
+        "monarch": {
+            "out": "src/syntaxes/class-diagram.monarch.ts"
+        }
+    }],
+    "out": "src/language/generated"
+}
