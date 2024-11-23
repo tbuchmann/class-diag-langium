@@ -1,13 +1,61 @@
 grammar ClassDiagram
 
 entry Model:
-    (persons+=Person | greetings+=Greeting)*;
+    (packages+=Package | types+=Type)*;
 
-Person:
-    'person' name=ID;
+Package:
+    'package' name=ID '{'
+        (packages+=Package | types+=Type)*
+    '}';
 
-Greeting:
-    'Hello' person=[Person:ID] '!';
+Type:
+    Class | Interface | DataType | Enumeration | Association;
+
+TypedElement:
+    Property | Operation;
+
+Property:
+    (vis=VisibilityKind)? name=ID type=[Type:ID] (lower=INT '..' upper=INT)?
+    ;
+
+Operation:
+    (vis=VisibilityKind)? type=[Type:ID] name=ID '(' params+=Parameter* ')'
+    ;
+
+Parameter:
+    name=ID ':' type=[Type:ID];
+
+Class:
+    (vis=VisibilityKind)? 'class' name=ID '{'
+        (properties+=Property | operations+=Operation)*
+    '}';
+
+Interface:
+    (vis=VisibilityKind)? 'interface' name=ID '{'
+        (properties+=Property | operations+=Operation)*
+    '}';
+
+DataType:
+    (vis=VisibilityKind)? 'dt' name=ID '{'
+        properties+=Property*
+    '}';
+
+Enumeration:
+    'enum' name=ID;
+
+Association:
+    'assoc' name=ID '{'
+        memberEnds+=MemberEnd*
+    '}';
+
+MemberEnd:
+    prop=Property (kind=AggregationKind)? (navigable?='+') ;
+
+AggregationKind returns string:
+    'none' | 'shared' | 'composite';
+
+VisibilityKind returns string:
+    'public' | 'protected' | 'private' | 'package';
 
 hidden terminal WS: /\s+/;
 terminal ID: /[_a-zA-Z][\w_]*/;
