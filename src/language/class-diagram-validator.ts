@@ -1,5 +1,5 @@
 import type { ValidationAcceptor, ValidationChecks } from 'langium';
-import type { ClassDiagramAstType, Class } from './generated/ast.js';
+import type { ClassDiagramAstType, Type, Property, Operation } from './generated/ast.js';
 import type { ClassDiagramServices } from './class-diagram-module.js';
 
 /**
@@ -9,7 +9,12 @@ export function registerValidationChecks(services: ClassDiagramServices) {
     const registry = services.validation.ValidationRegistry;
     const validator = services.validation.ClassDiagramValidator;
     const checks: ValidationChecks<ClassDiagramAstType> = {
-        Class: validator.checkPersonStartsWithCapital
+        Class: validator.checkTypeStartsWithCapital,
+        Interface: validator.checkTypeStartsWithCapital,
+        DataType: validator.checkTypeStartsWithCapital,
+        Enumeration: validator.checkTypeStartsWithCapital,
+        Property: validator.checkPropertyStartsWithLower,
+        Operation: validator.checkOperationStartsWithLower
     };
     registry.register(checks, validator);
 }
@@ -19,11 +24,29 @@ export function registerValidationChecks(services: ClassDiagramServices) {
  */
 export class ClassDiagramValidator {
 
-    checkPersonStartsWithCapital(clz: Class, accept: ValidationAcceptor): void {
-        if (clz.name) {
-            const firstChar = clz.name.substring(0, 1);
+    checkTypeStartsWithCapital(t: Type, accept: ValidationAcceptor): void {
+        if (t.name) {
+            const firstChar = t.name.substring(0, 1);
             if (firstChar.toUpperCase() !== firstChar) {
-                accept('warning', 'Person name should start with a capital.', { node: clz, property: 'name' });
+                accept('warning', 'Type name should start with a capital.', { node: t, property: 'name' });
+            }
+        }
+    }
+
+    checkPropertyStartsWithLower(p: Property, accept: ValidationAcceptor): void {
+        if (p.name) {
+            const firstChar = p.name.substring(0, 1);
+            if (firstChar.toLowerCase() != firstChar) {
+                accept('warning', 'Property name should start with lowercase.', { node: p, property: 'name'});
+            }
+        }
+    }
+
+    checkOperationStartsWithLower(o: Operation, accept: ValidationAcceptor): void {
+        if (o.name) {
+            const firstChar = o.name.substring(0, 1);
+            if (firstChar.toLowerCase() != firstChar) {
+                accept('warning', 'Operation name should start with lowercase.', { node: o, property: 'name'});
             }
         }
     }

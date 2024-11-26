@@ -15,7 +15,7 @@ TypedElement:
     Property | Operation;
 
 Property:
-    (vis=VisibilityKind)? name=ID type=[Type:ID] (lower=INT '..' upper=INT)?
+    (vis=VisibilityKind)? name=ID ':' type=[Type:ID] (lower=INT '..' upper=INT)?
     ;
 
 Operation:
