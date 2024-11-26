@@ -8,11 +8,11 @@
 	``npm  i -g yo generator-langium``
 
 - Install node dependencies
-	npm install
+	``npm install``
 
 ## Open directory with VSCode
 
 ## Make changes (if required)
 
 - Run the generator afterwards
-	npm run langium:generate
+	``npm run langium:generate``
