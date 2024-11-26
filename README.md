@@ -5,7 +5,7 @@
 ## Prerequisities
 
 - Install Yeoman
-	npm  i -g yo generator-langium
+	``npm  i -g yo generator-langium``
 
 - Install node dependencies
 	npm install
