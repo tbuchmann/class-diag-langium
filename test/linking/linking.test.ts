@@ -25,8 +25,12 @@ describe('Linking tests', () => {
 
     test('linking of greetings', async () => {
         document = await parse(`
-            person Langium
-            Hello Langium!
+            package de {
+                dt Integer {}
+                class Test {
+                    name : String
+                }
+            }
         `);
 
         expect(

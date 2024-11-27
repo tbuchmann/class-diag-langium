@@ -23,7 +23,8 @@ describe('Validating', () => {
   
     test('check no errors', async () => {
         document = await parse(`
-            person Langium
+            package de {
+            }
         `);
 
         expect(
@@ -37,7 +38,9 @@ describe('Validating', () => {
 
     test('check capital letter validation', async () => {
         document = await parse(`
-            person langium
+            package de {
+                class test {}
+            }
         `);
 
         expect(
@@ -45,7 +48,7 @@ describe('Validating', () => {
         ).toEqual(
             // 'expect.stringContaining()' makes our test robust against future additions of further validation rules
             expect.stringContaining(s`
-                [1:19..1:26]: Person name should start with a capital.
+                [2:22..2:26]: Type name should start with a capital.
             `)
         );
     });

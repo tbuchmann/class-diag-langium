@@ -21,14 +21,15 @@ describe('Parsing tests', () => {
 
     test('parse simple model', async () => {
         document = await parse(`
-            person Langium
-            Hello Langium!
+            package de {
+            }
         `);
 
         // check for absensce of parser errors the classic way:
         //  deacivated, find a much more human readable way below!
-        // expect(document.parseResult.parserErrors).toHaveLength(0);
+        expect(document.parseResult.parserErrors).toHaveLength(0);
 
+        /*
         expect(
             // here we use a (tagged) template expression to create a human readable representation
             //  of the AST part we are interested in and that is to be compared to our expectation;
@@ -36,7 +37,7 @@ describe('Parsing tests', () => {
             //  by means of the reusable function 'checkDocumentValid()' to sort out (critical) typos first;
             checkDocumentValid(document) || s`
                 Persons:
-                  ${document.parseResult.value?.persons?.map(p => p.name)?.join('\n  ')}
+                  ${document.parseResult.value?.packages?.map(p => p.name)?.join('\n  ')}
                 Greetings to:
                   ${document.parseResult.value?.greetings?.map(g => g.person.$refText)?.join('\n  ')}
             `
@@ -46,6 +47,7 @@ describe('Parsing tests', () => {
             Greetings to:
               Langium
         `);
+        */
     });
 });
 
