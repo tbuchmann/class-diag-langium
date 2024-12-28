@@ -1,15 +1,15 @@
 grammar ClassDiagram
 
+type Type =
+    Class | Interface | DataType | Enumeration | Association;
+
 entry Model:
-    (packages+=Package | types+=Type)*;
+    (packages+=Package | types+=[Type:ID])*;
 
 Package:
     'package' name=ID '{'
-        (packages+=Package | types+=Type)*
+        (packages+=Package | types+=[Type:ID])*
     '}';
-
-Type:
-    Class | Interface | DataType | Enumeration | Association;
 
 TypedElement:
     Property | Operation;
