@@ -4,11 +4,11 @@ type Type =
     Class | Interface | DataType | Enumeration | Association;
 
 entry Model:
-    (packages+=Package | types+=[Type:ID])*;
+    packages+=Package*;
 
 Package:
     'package' name=ID '{'
-        (packages+=Package | types+=[Type:ID])*
+        (packages+=Package | types+=(Class|Interface|DataType|Enumeration|Association) )*
     '}';
 
 TypedElement:
@@ -25,26 +25,26 @@ Operation:
 Parameter:
     name=ID ':' type=[Type:ID];
 
-Class:
-    (vis=VisibilityKind)? 'class' name=ID '{'
+Class returns Type:
+    {infer Class} (vis=VisibilityKind)? 'class' name=ID ('extends' superClasses+=[Class:ID] (',' superClasses+=[Class:ID])*)? '{'
         (properties+=Property | operations+=Operation)*
     '}';
 
-Interface:
-    (vis=VisibilityKind)? 'interface' name=ID '{'
+Interface returns Type:
+    {infer Interface} (vis=VisibilityKind)? 'interface' (superInterfaces+=[Interface:ID] (',' superInterfaces+=[Interface:ID])*)? name=ID '{'
         (properties+=Property | operations+=Operation)*
     '}';
 
-DataType:
-    (vis=VisibilityKind)? 'dt' name=ID '{'
+DataType returns Type:
+    {infer DataType} (vis=VisibilityKind)? 'dt' name=ID '{'
         properties+=Property*
     '}';
 
-Enumeration:
-    'enum' name=ID;
+Enumeration returns Type:
+    {infer Enumeration} 'enum' name=ID;
 
-Association:
-    'assoc' name=ID '{'
+Association returns Type:
+    {infer Association} 'assoc' name=ID '{'
         memberEnds+=MemberEnd*
     '}';
 

@@ -52,6 +52,23 @@ describe('Validating', () => {
             `)
         );
     });
+
+    test('check class inheritance cycle', async () => {
+        document = await parse(`
+            package de {
+                class A extends B {}
+                class B extends A {}
+            }
+        `);
+            //console.log(document?.diagnostics?.map(diagnosticToString)?.join('\n'));
+        expect(
+            checkDocumentValid(document) || document?.diagnostics?.map(diagnosticToString)?.join('\n')
+        ).toEqual(
+            expect.stringContaining(s`
+                [2:32..2:33]: Cycle in class inheritance
+            `)
+        );
+    });
 });
 
 function checkDocumentValid(document: LangiumDocument): string | undefined {

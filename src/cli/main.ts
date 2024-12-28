@@ -1,11 +1,10 @@
-//import type { Model } from '../language/generated/ast.js';
-import type { Class } from '../language/generated/ast.js';
+import type { Model } from '../language/generated/ast.js';
 import chalk from 'chalk';
 import { Command } from 'commander';
 import { ClassDiagramLanguageMetaData } from '../language/generated/module.js';
 import { createClassDiagramServices } from '../language/class-diagram-module.js';
 import { extractAstNode } from './cli-util.js';
-import { generateJava } from './generator.js';
+import { generateCode } from './generator.js';
 import { NodeFileSystem } from 'langium/node';
 import * as url from 'node:url';
 import * as fs from 'node:fs/promises';
@@ -16,11 +15,10 @@ const packagePath = path.resolve(__dirname, '..', '..', 'package.json');
 const packageContent = await fs.readFile(packagePath, 'utf-8');
 
 export const generateAction = async (fileName: string, opts: GenerateOptions): Promise<void> => {
-    const services = createClassDiagramServices(NodeFileSystem).ClassDiagram;
-    //const model = await extractAstNode<Model>(fileName, services);
-    const clz = await extractAstNode<Class>(fileName, services);
-    const generatedFilePath = generateJava(clz, fileName, opts.destination);
-    console.log(chalk.green(`JavaScript code generated successfully: ${generatedFilePath}`));
+    const services = createClassDiagramServices(NodeFileSystem).ClassDiagram;    
+    const model = await extractAstNode<Model>(fileName, services);
+    const generatedFilePath = generateCode(model, fileName, opts.destination);
+    console.log(chalk.green(`Code generated successfully: ${generatedFilePath}`));
 };
 
 export type GenerateOptions = {

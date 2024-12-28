@@ -58,8 +58,8 @@ export function generateCode(model: Model, filePath: string, destination: string
     */
    model.packages.forEach(pkg => {
         pkg.types.forEach(type => {
-            if (type.ref?.$type === 'Class') {
-                generateClass(type.ref, pkg.name, filePath, destination);
+            if (type.$type === 'Class') {
+                generateClass(type, pkg.name, filePath, destination);
             }
         });
    });   
@@ -75,12 +75,12 @@ export function generateClassDiagram(pkg: Package, filePath: string, destination
     let interfaceSet = new Set<Interface>();
 
     pkg.types.forEach(type => {
-        if (type.ref?.$type === 'Class') {
-            classSet.add(type.ref);
-        } else if (type.ref?.$type === 'Enumeration') {
-            enumSet.add(type.ref);
-        }  else if (type.ref?.$type === 'Interface') {
-            interfaceSet.add(type.ref);
+        if (type.$type === 'Class') {
+            classSet.add(type);
+        } else if (type.$type === 'Enumeration') {
+            enumSet.add(type);
+        }  else if (type.$type === 'Interface') {
+            interfaceSet.add(type);
         }
     });
 
