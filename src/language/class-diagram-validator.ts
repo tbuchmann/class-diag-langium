@@ -1,5 +1,5 @@
 import type { ValidationAcceptor, ValidationChecks, Reference } from 'langium';
-import type { ClassDiagramAstType, Class, Interface, Type, Property, Operation } from './generated/ast.js';
+import type { ClassDiagramAstType, Class, Interface, Type, Property, Operation, Enumeration, Package, Model } from './generated/ast.js';
 import type { ClassDiagramServices } from './class-diagram-module.js';
 
 /**
@@ -9,12 +9,14 @@ export function registerValidationChecks(services: ClassDiagramServices) {
     const registry = services.validation.ValidationRegistry;
     const validator = services.validation.ClassDiagramValidator;
     const checks: ValidationChecks<ClassDiagramAstType> = {
-        Class: [ validator.checkTypeStartsWithCapital, validator.checkNoCycleInClassInheritance],
-        Interface: [ validator.checkTypeStartsWithCapital, validator.checkNoCycleInInterfaceInheritance],
-        DataType: validator.checkTypeStartsWithCapital,
-        Enumeration: validator.checkTypeStartsWithCapital,
-        Property: validator.checkPropertyStartsWithLower,
-        Operation: validator.checkOperationStartsWithLower
+        Class: [ validator.checkTypeStartsWithCapital, validator.checkNoCycleInClassInheritance, validator.checkDuplicateTypeName],
+        Interface: [ validator.checkTypeStartsWithCapital, validator.checkNoCycleInInterfaceInheritance, validator.checkDuplicateTypeName],
+        DataType: [ validator.checkTypeStartsWithCapital, validator.checkDuplicateTypeName ],
+        Enumeration: [ validator.checkTypeStartsWithCapital, validator.checkDuplicateTypeName, validator.checkDuplicateEnumerationLiteralName ],
+        Property: [ validator.checkPropertyStartsWithLower, validator.checkDuplicatePropertyName ],
+        Operation: [ validator.checkOperationStartsWithLower, validator.checkDuplicateOperationName ],
+        //Model: [ validator.checkDuplicateRootPackageName ],
+        Package: [ validator.checkDuplicatePackageName],
     };
     registry.register(checks, validator);
 }
@@ -96,5 +98,58 @@ export class ClassDiagramValidator {
             superInterfacesToCheck.push(...(superInterface.ref as Interface).superInterfaces || []);            
         }            
     }
+
+    checkDuplicateTypeName(t: Type, accept: ValidationAcceptor): void {        
+        t.$container?.types.forEach(type => {
+            if (type !== t && type.name === t.name) {
+                accept('error', `Duplicate type name '${t.name}'.`, { node: t, property: 'name' });
+            }
+        });
+    }
+
+    checkDuplicatePropertyName(p: Property, accept: ValidationAcceptor): void {        
+        p.$container?.properties.forEach(property => {
+            if (property !== p && property.name === p.name) {
+                accept('error', `Duplicate property name '${p.name}'.`, { node: p, property: 'name' });
+            }
+        });
+    }
+
+    checkDuplicateOperationName(o: Operation, accept: ValidationAcceptor): void {        
+        o.$container?.operations.forEach(operation => {
+            if (operation !== o && operation.name === o.name) {
+                accept('error', `Duplicate operation name '${o.name}'.`, { node: o, property: 'name' });
+            }
+        });
+    }
+    
+    checkDuplicateEnumerationLiteralName(e: Enumeration, accept: ValidationAcceptor): void {        
+        let litNames = new Array<string>();
+        e.literals.forEach(literal => {
+            if (litNames.includes(literal)) {
+                accept('error', `Duplicate enumeration literal name '${literal}'.`, { node: e, property: 'literals' });
+            }
+            litNames.push(literal);
+        });
+    }
+
+    checkDuplicatePackageName(p: Package, accept: ValidationAcceptor): void {        
+        p.$container?.packages.forEach(pkg => {
+            if (pkg !== p && pkg.name === p.name) {
+                accept('error', `Duplicate package name '${p.name}'.`, { node: p, property: 'name' });
+            }
+        });
+    }
+
+    /* not neccessary...
+    checkDuplicateRootPackageName(m: Model, accept: ValidationAcceptor): void {        
+        let rootPackages = new Array<string>();
+        m.packages.forEach(pkg => {
+            if (rootPackages.includes(pkg.name)) {
+                accept('error', `Duplicate package name '${pkg.name}'.`, { node: m, property: 'packages' });
+            }
+            rootPackages.push(pkg.name);
+        });
+    }*/
     
 }

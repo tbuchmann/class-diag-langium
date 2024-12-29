@@ -1,25 +1,25 @@
 grammar ClassDiagram
 
 type Type =
-    Class | Interface | DataType | Enumeration | Association;
+    Class | Interface | DataType | PrimitiveType | Enumeration | Association;
 
 entry Model:
     packages+=Package*;
 
 Package:
     'package' name=ID '{'
-        (packages+=Package | types+=(Class|Interface|DataType|Enumeration|Association) )*
+        (packages+=Package | types+=(Class|Interface|DataType|PrimitiveType|Enumeration|Association) )*
     '}';
 
 TypedElement:
     Property | Operation;
 
 Property:
-    (vis=VisibilityKind)? name=ID ':' type=[Type:ID] (lower=INT '..' upper=INT)?
+    (vis=VisibilityKind)? name=ID ':' type=[Type:ID] (lower=INT '..' upper=INT)? (kind=AggregationKind)? (navigable?='+')?
     ;
 
 Operation:
-    (vis=VisibilityKind)? type=[Type:ID] name=ID '(' params+=Parameter* ')'
+    (vis=VisibilityKind)? name=ID '(' params+=Parameter* ')' (':' type=[Type:ID])?
     ;
 
 Parameter:
@@ -40,17 +40,22 @@ DataType returns Type:
         properties+=Property*
     '}';
 
+PrimitiveType returns Type:
+    {infer PrimitiveType} 'pt' name=ID;
+
 Enumeration returns Type:
-    {infer Enumeration} 'enum' name=ID;
+    {infer Enumeration} 'enum' name=ID '{'
+        literals+=ID (',' literals+=ID)*
+    '}';
 
 Association returns Type:
     {infer Association} 'assoc' name=ID '{'
-        memberEnds+=MemberEnd*
+        properties+=Property*
     '}';
-
+/*
 MemberEnd:
     prop=Property (kind=AggregationKind)? (navigable?='+') ;
-
+*/
 AggregationKind returns string:
     'none' | 'shared' | 'composite';
 

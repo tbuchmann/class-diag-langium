@@ -24,8 +24,19 @@ describe('Validating', () => {
     test('check no errors', async () => {
         document = await parse(`
             package de {
+                pt Integer
+                pt String
+                class Test {
+                    public a : Integer
+                    private b : String
+                    c : String
+                    protected doSmth(test : String) : Integer
+                }
+                interface ITest {}
+                enum ETest {A, B, C}
+                dt DTest {}
             }
-        `);
+        `);        
 
         expect(
             // here we first check for validity of the parsed document object by means of the reusable function
@@ -51,6 +62,131 @@ describe('Validating', () => {
                 [2:22..2:26]: Type name should start with a capital.
             `)
         );
+    });
+
+    test('check lower case property name', async () => {
+        document = await parse(`
+            package de {
+                pt Integer
+                class Test {                    
+                    public A : Integer
+                }
+            }
+        `);
+
+        expect(
+            checkDocumentValid(document) || document?.diagnostics?.map(diagnosticToString)?.join('\n')
+        ).toEqual(
+            expect.stringContaining(s`
+                [4:27..4:28]: Property name should start with lowercase.
+            `)
+        );
+    });
+
+    test('check lower case operation name', async () => {
+        document = await parse(`
+            package de {
+                pt Integer
+                class Test {
+                    public DoSmth(test : Integer) : Integer
+                }
+            }
+        `);
+
+        expect(
+            checkDocumentValid(document) || document?.diagnostics?.map(diagnosticToString)?.join('\n')
+        ).toEqual(
+            expect.stringContaining(s`
+                [4:27..4:33]: Operation name should start with lowercase.
+            `)
+        );
+    });
+
+    test('check duplicate type name', async () => {
+        document = await parse(`
+            package de {
+                class Test {}
+                class Test {}
+            }
+        `);
+
+        expect(
+            checkDocumentValid(document) || document?.diagnostics?.map(diagnosticToString)?.join('\n')
+        ).toEqual(
+            expect.stringContaining(s`
+                [2:22..2:26]: Duplicate type name 'Test'.
+                [3:22..3:26]: Duplicate type name 'Test'.
+            `)
+        );
+    });
+
+    test('check duplicate property name', async () => {
+        document = await parse(`
+            package de {
+                pt Integer
+                class Test {
+                    public a : Integer
+                    public a : Integer
+                }
+            }
+        `);
+
+        expect(
+            checkDocumentValid(document) || document?.diagnostics?.map(diagnosticToString)?.join('\n')
+        ).toEqual(
+            expect.stringContaining(s`
+                [4:27..4:28]: Duplicate property name 'a'.
+                [5:27..5:28]: Duplicate property name 'a'.
+            `)
+        );
+    });
+
+    test('check duplicate operation name', async () => {
+        document = await parse(`
+            package de {
+                pt Integer
+                class Test {
+                    public a() : Integer
+                    public a() : Integer
+                }
+            }
+        `);
+
+        expect(
+            checkDocumentValid(document) || document?.diagnostics?.map(diagnosticToString)?.join('\n')
+        ).toEqual(
+            expect.stringContaining(s`
+                [4:27..4:28]: Duplicate operation name 'a'.
+                [5:27..5:28]: Duplicate operation name 'a'.
+            `)
+        );
+    });
+
+    test('check duplicate package name', async () => {
+        document = await parse(`
+            package de {
+                class Test {}
+            }
+            package de {
+                class Test {}
+            }
+        `);
+
+        console.log(document?.diagnostics?.map(diagnosticToString)?.join('\n'));
+
+        expect(
+            checkDocumentValid(document) || document?.diagnostics?.map(diagnosticToString)?.join('\n')
+        ).toEqual(
+            expect.stringContaining(s`
+                [1:20..1:22]: Duplicate package name 'de'.
+                [4:20..4:22]: Duplicate package name 'de'.
+            `)
+        );
+        
+    });
+
+    test('check duplicate enum constant name', async () => {
+
     });
 
     test('check class inheritance cycle', async () => {
