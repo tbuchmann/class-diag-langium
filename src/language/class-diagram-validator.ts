@@ -1,5 +1,5 @@
 import type { ValidationAcceptor, ValidationChecks, Reference } from 'langium';
-import type { ClassDiagramAstType, Class, Interface, Type, Property, Operation, Enumeration, Package, Model } from './generated/ast.js';
+import type { ClassDiagramAstType, Class, Interface, Type, Property, Operation, Enumeration, Package } from './generated/ast.js';
 import type { ClassDiagramServices } from './class-diagram-module.js';
 
 /**

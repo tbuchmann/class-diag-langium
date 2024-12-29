@@ -186,6 +186,19 @@ describe('Validating', () => {
     });
 
     test('check duplicate enum constant name', async () => {
+        document = await parse(`
+            package de {
+                enum Test {A, A}
+            }
+        `);
+
+        expect(
+            checkDocumentValid(document) || document?.diagnostics?.map(diagnosticToString)?.join('\n')
+        ).toEqual(
+            expect.stringContaining(s`
+                [2:27..2:28]: Duplicate enumeration literal name 'A'.
+            `)
+        );
 
     });
 
@@ -202,6 +215,23 @@ describe('Validating', () => {
         ).toEqual(
             expect.stringContaining(s`
                 [2:32..2:33]: Cycle in class inheritance
+            `)
+        );
+    });
+
+    test('check interface inheritance cycle', async () => {
+        document = await parse(`
+            package de {
+                interface A extends B {}
+                interface B extends A {}
+            }
+        `);
+
+        expect(
+            checkDocumentValid(document) || document?.diagnostics?.map(diagnosticToString)?.join('\n')
+        ).toEqual(
+            expect.stringContaining(s`
+                [2:36..2:37]: Cycle in interface inheritance
             `)
         );
     });
