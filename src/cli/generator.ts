@@ -9,6 +9,8 @@ export function generateCode(model: Model, filePath: string, destination: string
    allTypes.forEach(type => {
         if (type.$type === 'Class') {
             generateJavaClass(type, type.$container.name, filePath, destination);
+        } else if (type.$type === 'Interface') {
+            generateJavaInterface(type, type.$container.name, filePath, destination);
         }
     });    
    
@@ -95,7 +97,30 @@ export function generateJavaClass(clz: Class, pkgName: string, filePath: string,
         package ${getQualifiedName(clz.$container, '.')};
 
         public class ${clz.name} {
-        
+            ${clz.properties?.map(prop => `${prop.vis ?? ''} ${prop.type?.ref?.name} ${prop.name};`).join('\n')}
+
+            ${clz.operations?.map(op => `${op.vis ?? ''} ${op.type?.ref?.name ?? 'void'} ${op.name}(${op.params.map(param => `${param.type?.ref?.name} ${param.name}`).join(', ')}) {}`).join('\n')}
+        }
+    `.appendNewLineIfNotEmpty();
+
+    if (!fs.existsSync(data.destination)) {
+        fs.mkdirSync(data.destination, { recursive: true });
+    }
+    fs.writeFileSync(generatedFilePath, toString(fileNode));
+    return generatedFilePath;
+}
+
+export function generateJavaInterface(inf: Interface, pkgName: string, filePath: string, destination: string | undefined): string {
+    const data = extractDestinationAndName(filePath, destination + "/" + getQualifiedName(inf.$container, '/'));
+    const generatedFilePath = `${path.join(data.destination, inf.name)}.java`;
+
+    const fileNode = expandToNode`
+        package ${getQualifiedName(inf.$container, '.')};
+
+        public interface ${inf.name} {
+            ${inf.properties?.map(prop => `${prop.type?.ref?.name} ${prop.name} = null;`).join('\n')}
+
+            ${inf.operations?.map(op => `${op.type?.ref?.name ?? 'void'} ${op.name}(${op.params.map(param => `${param.type?.ref?.name} ${param.name}`).join(', ')});`).join('\n')}
         }
     `.appendNewLineIfNotEmpty();
 
