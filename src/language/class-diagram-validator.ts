@@ -14,8 +14,7 @@ export function registerValidationChecks(services: ClassDiagramServices) {
         DataType: [ validator.checkTypeStartsWithCapital, validator.checkDuplicateTypeName ],
         Enumeration: [ validator.checkTypeStartsWithCapital, validator.checkDuplicateTypeName, validator.checkDuplicateEnumerationLiteralName, validator.checkEnumLiteralIsCapital ],
         Property: [ validator.checkPropertyStartsWithLower, validator.checkDuplicatePropertyName ],
-        Operation: [ validator.checkOperationStartsWithLower, validator.checkDuplicateOperationName ],
-        //Model: [ validator.checkDuplicateRootPackageName ],
+        Operation: [ validator.checkOperationStartsWithLower, validator.checkDuplicateOperationName ],        
         Package: [ validator.checkDuplicatePackageName],
     };
     registry.register(checks, validator);

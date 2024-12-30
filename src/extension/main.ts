@@ -13,9 +13,7 @@ let client: LanguageClient;
 
 // This function is called when the extension is activated.
 export function activate(context: vscode.ExtensionContext): void {
-    let disposable = vscode.workspace.onDidSaveTextDocument((document) => {
-        //const saveTime = new Date().toISOString();
-        //console.log(`[${saveTime}] File saved: ${document.fileName}`);
+    let disposable = vscode.workspace.onDidSaveTextDocument((document) => {        
         if (document.fileName.endsWith('.cdiag')) {
             const filePath = document.fileName;
             const directoryPath = path.dirname(filePath);

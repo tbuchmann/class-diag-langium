@@ -65,10 +65,10 @@ export function generateClassDiagram(pkg: Package, filePath: string, destination
     assocTypeMap.set('shared', 'o--');
     assocTypeMap.set('composite', '*--');
 
-    let classSet = new Set<Class>();
-    let enumSet = new Set<Enumeration>();
-    let interfaceSet = new Set<Interface>();
-    let assocSet = new Set<Association>();
+    const classSet = new Set<Class>();
+    const enumSet = new Set<Enumeration>();
+    const interfaceSet = new Set<Interface>();
+    const assocSet = new Set<Association>();
 
     pkg.types.forEach(type => {
         if (type.$type === 'Class') {
