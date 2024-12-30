@@ -1,53 +1,30 @@
-//import type { Model } from '../language/generated/ast.js';
-import { type Enumeration, type Class, type Model, type Package, type Interface, Property, Association } from '../language/generated/ast.js';
+import { type Enumeration, type Class, type Model, type Package, type Interface, Property, Association, PrimitiveType, DataType } from '../language/generated/ast.js';
 import { expandToNode, toString } from 'langium/generate';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { extractDestinationAndName } from './cli-util.js';
-//import { vi } from 'vitest';
-
 
 export function generateCode(model: Model, filePath: string, destination: string | undefined): string {
-    /*
-    const data = extractDestinationAndName(filePath, destination);
-    const generatedFilePath = `${path.join(data.destination, data.name)}.java`;
-
-    const fileNode = expandToNode`
-        package ${model.name};
-
-        ${model.packages.map(pkg => `
-            package ${pkg.name} {
-                ${pkg.types.map(type => `
-                    ${type.$type === 'Class' ? `
-                        class ${type.name} {
-                            ${type.features.map(feature => `
-                                ${feature.$type === 'Property' ? `
-                                    ${feature.name} : ${feature.type.name}
-                                ` : feature.$type === 'Operation' ? `
-                                    ${feature.name}(${feature.parameters.map(param => `${param.name} : ${param.type.name}`).join(', ')}) : ${feature.returnType.name}
-                                ` : ''}
-                            `).join('\n')}
-                        }
-                    ` : ''}
-                `).join('\n')}
-            }
-        `).join('\n')}
-    `.appendNewLineIfNotEmpty();
-
-    if (!fs.existsSync(data.destination)) {
-        fs.mkdirSync(data.destination, { recursive: true });
-    }
-    fs.writeFileSync(generatedFilePath, toString(fileNode));
-    return generatedFilePath;
-    */
-   model.packages.forEach(pkg => {
-        pkg.types.forEach(type => {
-            if (type.$type === 'Class') {
-                generateJavaClass(type, pkg.name, filePath, destination);
-            }
-        });
-   });   
+   const allTypes = collectAllTypes(model);
+   allTypes.forEach(type => {
+        if (type.$type === 'Class') {
+            generateJavaClass(type, type.$container.name, filePath, destination);
+        }
+    });    
+   
    return destination || '';
+}
+
+function collectAllTypes(model: Model): Array<Class | DataType | PrimitiveType | Enumeration | Interface | Association> {
+    const types: Array<Class | DataType | PrimitiveType | Enumeration | Interface | Association> = [];
+
+    function collect(pkg: Package) {
+        pkg.types.forEach(type => types.push(type));
+        pkg.packages.forEach(subPkg => collect(subPkg));
+    }
+
+    model.packages.forEach(pkg => collect(pkg));
+    return types;
 }
 
 export function generateClassDiagram(pkg: Package, filePath: string, destination: string) : string {
@@ -95,8 +72,8 @@ export function generateClassDiagram(pkg: Package, filePath: string, destination
           ${inf.properties?.map(prop => `${visMap.get(prop.vis ?? 'package')} ${prop.name} : ${prop.type?.ref?.name} ${genCardinality(prop)}`).join('\n')}
                 ${inf.operations?.map(op => `${visMap.get(op.vis ?? 'package')} ${op.name}(${op.params.map(param => `${param.name} : ${param.type?.ref?.name}`).join(', ')}) : ${op.type?.ref?.name}`).join('\n')}
         }`).join('\n')}
-        ${Array.from(classSet).map(clz => `${clz.superClasses?.map(superClass => `${clz.name} --|> ${superClass.ref?.name}`).join('\n')}
-        ${clz.superInterfaces?.map(superInterface => `${clz.name} ..|> ${superInterface.ref?.name}`).join('\n')}`)}
+        ${Array.from(classSet).map(clz => genSuperClasses(clz)).join('\n')}
+        ${Array.from(classSet).map(clz => genImplementingInterfaces(clz)).join('\n')}
         ${Array.from(interfaceSet).map(inf => genSuperInterfaces(inf)).join('\n')}
         ${Array.from(assocSet).map(assoc => `${assoc.properties?.[0].type.ref?.name} "${assoc.properties?.[0].upper}" ${assocTypeMap.get(assoc.properties?.[0].kind ?? 'none')} ${assoc.properties?.[1].upper} ${assoc.properties?.[1].type.ref?.name} : ${assoc.name} >`).join('\n')}
         @enduml
@@ -111,11 +88,11 @@ export function generateClassDiagram(pkg: Package, filePath: string, destination
 
 
 export function generateJavaClass(clz: Class, pkgName: string, filePath: string, destination: string | undefined): string {
-    const data = extractDestinationAndName(filePath, destination);
-    const generatedFilePath = `${path.join(data.destination, data.name)}.java`;
+    const data = extractDestinationAndName(filePath, destination + "/" + getQualifiedName(clz.$container, '/'));
+    const generatedFilePath = `${path.join(data.destination, clz.name)}.java`;
 
     const fileNode = expandToNode`
-        package ${clz.$container};
+        package ${getQualifiedName(clz.$container, '.')};
 
         public class ${clz.name} {
         
@@ -142,12 +119,28 @@ function genCardinality(p: Property) : string {
     }
 }
 
-function genSuperInterfaces(i: Interface) : string {
-    let str = i.superInterfaces?.map(superInterface => `${i.name} ..|> ${superInterface.ref?.name}`).join('\n');
-    console.log(str);
-    return str;
+function genSuperInterfaces(i: Interface) : string {    
+    return i.superInterfaces?.map(superInterface => `${superInterface.ref?.name} <|.. ${i.name}`).join('\n');
 }
 
-// function generatePlantUMLType(type: Class | Interface | Enumeration): string {
-    
-// }
+function genSuperClasses(c: Class) : string {
+    return c.superClasses?.map(superClass => `${superClass.ref?.name} <|-- ${c.name}`).join('\n');
+}
+
+function genImplementingInterfaces(c: Class) : string {
+    return c.superInterfaces?.map(superInterface => `${superInterface.ref?.name} <|.. ${c.name}`).join('\n');
+}
+
+function getQualifiedName(pkg: Package, sep: string) : string {
+    const names = new Array<string>();
+    let current: Package | undefined = pkg;
+    while (current !== undefined) {
+        names.push(current.name);
+        if (current.$container.$type !== 'Model') 
+            current = current.$container;
+        else
+            current = undefined;
+    }
+    return names.reverse().join(sep).toString();
+}
+

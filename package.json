@@ -81,7 +81,23 @@
                 "scopeName": "source.class-diagram",
                 "path": "syntaxes/class-diagram.tmLanguage.json"
             }
-        ]
+        ],
+        "commands": [
+            {
+                "command": "class-diagram.generate",
+                "title": "Generate Java Code",
+                "category": "Class Diagram"
+            }
+        ],
+        "menus": {
+            "explorer/context": [
+                {
+                    "command": "class-diagram.generate", 
+                    "when": "resourceExtname == .cdiag",                   
+                    "group": "navigation"
+                }
+            ]
+        }
     },
     "activationEvents": [
         "onLanguage:class-diagram"

@@ -2,7 +2,7 @@ import type { LanguageClientOptions, ServerOptions} from 'vscode-languageclient/
 import * as vscode from 'vscode';
 import * as path from 'node:path';
 import { LanguageClient, TransportKind } from 'vscode-languageclient/node.js';
-import { generateClassDiagram } from '../cli/generator.js';
+import { generateClassDiagram, generateCode } from '../cli/generator.js';
 import { createClassDiagramServices } from '../language/class-diagram-module.js';
 import { extractAstNode } from '../cli/cli-util.js';
 import { NodeFileSystem } from 'langium/node';
@@ -21,7 +21,23 @@ export function activate(context: vscode.ExtensionContext): void {
         }
     });
 
+    const disposable2 = vscode.commands.registerCommand('class-diagram.generate', (uri: vscode.Uri) => {
+        // `uri` is the URI of the file that was right-clicked
+        vscode.window.showInformationMessage(`Generating code: ${uri.fsPath}`);
+        
+        // Add your custom logic here, e.g., launch an external tool
+        
+        const editor = vscode.window.activeTextEditor;
+        if (editor) {
+            const fileName = editor.document.fileName;
+            const directoryPath = path.dirname(fileName);
+            generateCodeAction(fileName, directoryPath+'/src');
+        }
+        vscode.window.showInformationMessage('Code generation completed');
+    });
+
     context.subscriptions.push(disposable);
+    context.subscriptions.push(disposable2);
     client = startLanguageClient(context);
 }
 
@@ -40,6 +56,13 @@ export const generateAction = async (fileName: string, destination: string): Pro
         const generatedFilePath = generateClassDiagram(pkg, fileName, destination);
         console.log(chalk.green(`Code generated successfully: ${generatedFilePath}`));
     });    
+};
+
+export const generateCodeAction = async (fileName: string, destination: string): Promise<void> => {
+    const services = createClassDiagramServices(NodeFileSystem).ClassDiagram;    
+    const model = await extractAstNode<Model>(fileName, services);
+    const generatedFilePath = generateCode(model, fileName, destination);
+    console.log(chalk.green(`Code generated successfully: ${generatedFilePath}`));
 };
 
 function startLanguageClient(context: vscode.ExtensionContext): LanguageClient {
