@@ -77,7 +77,7 @@ export function generateClassDiagram(pkg: Package, filePath: string, destination
         ${Array.from(classSet).map(clz => genSuperClasses(clz)).join('\n')}
         ${Array.from(classSet).map(clz => genImplementingInterfaces(clz)).join('\n')}
         ${Array.from(interfaceSet).map(inf => genSuperInterfaces(inf)).join('\n')}
-        ${Array.from(assocSet).map(assoc => `${assoc.properties?.[0].type.ref?.name} "${assoc.properties?.[0].upper}" ${assocTypeMap.get(assoc.properties?.[0].kind ?? 'none')} ${assoc.properties?.[1].upper} ${assoc.properties?.[1].type.ref?.name} : ${assoc.name} >`).join('\n')}
+        ${Array.from(assocSet).map(assoc => `${assoc.properties?.[0].type.ref?.name} "${assoc.properties?.[0].upper ?? 1}" ${assocTypeMap.get(assoc.properties?.[0].kind ?? 'none')} "${assoc.properties?.[1].upper ?? 1}" ${assoc.properties?.[1].type.ref?.name} : ${assoc.name} >`).join('\n')}
         @enduml
     `.appendNewLineIfNotEmpty();
 
