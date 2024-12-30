@@ -33,7 +33,8 @@ Class returns Type:
     '}';
 
 Interface returns Type:
-    {infer Interface} (vis=VisibilityKind)? 'interface' name=ID ('extends' superInterfaces+=[Interface:ID] (',' superInterfaces+=[Interface:ID])*)? '{'
+    {infer Interface} (vis=VisibilityKind)? 'interface' name=ID 
+    ('extends' superInterfaces+=[Interface:ID] (',' superInterfaces+=[Interface:ID])*)? '{'
         (properties+=Property | operations+=Operation)*
     '}';
 

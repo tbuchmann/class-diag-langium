@@ -145,11 +145,15 @@ describe('Parsing tests', () => {
             checkDocumentValid(document) || s`
             Classes:
               ${(document.parseResult.value?.packages?.[0].types as Class[]).map(c => c.name)?.join('\n')}
+            Super-Classes of B:
+              ${(document.parseResult.value?.packages?.[0].types?.[1] as Class).superClasses?.map(c => c.ref?.name)?.join('\n')}
             `
         ).toBe(s`
             Classes:
               A
               B
+            Super-Classes of B:
+              A
         `);
     });
 

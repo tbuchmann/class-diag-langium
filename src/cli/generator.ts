@@ -97,7 +97,7 @@ export function generateClassDiagram(pkg: Package, filePath: string, destination
         }`).join('\n')}
         ${Array.from(classSet).map(clz => `${clz.superClasses?.map(superClass => `${clz.name} --|> ${superClass.ref?.name}`).join('\n')}
         ${clz.superInterfaces?.map(superInterface => `${clz.name} ..|> ${superInterface.ref?.name}`).join('\n')}`)}
-        ${Array.from(interfaceSet).map(inf => `${inf.superInterfaces?.map(superInterface => `${inf.name} --|> ${superInterface.ref?.name}`).join('\n')}`)}
+        ${Array.from(interfaceSet).map(inf => genSuperInterfaces(inf)).join('\n')}
         ${Array.from(assocSet).map(assoc => `${assoc.properties?.[0].type.ref?.name} "${assoc.properties?.[0].upper}" ${assocTypeMap.get(assoc.properties?.[0].kind ?? 'none')} ${assoc.properties?.[1].upper} ${assoc.properties?.[1].type.ref?.name} : ${assoc.name} >`).join('\n')}
         @enduml
     `.appendNewLineIfNotEmpty();
@@ -140,6 +140,12 @@ function genCardinality(p: Property) : string {
         //return `${p.lowerBound}..${p.upperBound}`;
         return '';
     }
+}
+
+function genSuperInterfaces(i: Interface) : string {
+    let str = i.superInterfaces?.map(superInterface => `${i.name} ..|> ${superInterface.ref?.name}`).join('\n');
+    console.log(str);
+    return str;
 }
 
 // function generatePlantUMLType(type: Class | Interface | Enumeration): string {
