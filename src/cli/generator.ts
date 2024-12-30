@@ -96,7 +96,7 @@ export function generateJavaClass(clz: Class, pkgName: string, filePath: string,
     const fileNode = expandToNode`
         package ${getQualifiedName(clz.$container, '.')};
 
-        public class ${clz.name} {
+        public class ${clz.name} ${printExtendsAndImplements(clz)} {
             ${clz.properties?.map(prop => `${prop.vis ?? ''} ${prop.type?.ref?.name} ${prop.name};`).join('\n')}
 
             ${clz.operations?.map(op => `${op.vis ?? ''} ${op.type?.ref?.name ?? 'void'} ${op.name}(${op.params.map(param => `${param.type?.ref?.name} ${param.name}`).join(', ')}) {}`).join('\n')}
@@ -117,7 +117,7 @@ export function generateJavaInterface(inf: Interface, pkgName: string, filePath:
     const fileNode = expandToNode`
         package ${getQualifiedName(inf.$container, '.')};
 
-        public interface ${inf.name} {
+        public interface ${inf.name} ${printExtends(inf)} {
             ${inf.properties?.map(prop => `${prop.type?.ref?.name} ${prop.name} = null;`).join('\n')}
 
             ${inf.operations?.map(op => `${op.type?.ref?.name ?? 'void'} ${op.name}(${op.params.map(param => `${param.type?.ref?.name} ${param.name}`).join(', ')});`).join('\n')}
@@ -167,5 +167,14 @@ function getQualifiedName(pkg: Package, sep: string) : string {
             current = undefined;
     }
     return names.reverse().join(sep).toString();
+}
+
+function printExtendsAndImplements(type: Class) : string {
+    return type.superClasses?.map(superClass => `extends ${superClass.ref?.name}`).join(', ') + ' ' +
+           type.superInterfaces?.map(superInterface => `implements ${superInterface.ref?.name}`).join(', ');
+}
+
+function printExtends(type: Interface): string {
+    return type.superInterfaces?.map(superInterface => `extends ${superInterface.ref?.name}`).join(', ');
 }
 
