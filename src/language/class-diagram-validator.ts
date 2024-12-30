@@ -12,7 +12,7 @@ export function registerValidationChecks(services: ClassDiagramServices) {
         Class: [ validator.checkTypeStartsWithCapital, validator.checkNoCycleInClassInheritance, validator.checkDuplicateTypeName],
         Interface: [ validator.checkTypeStartsWithCapital, validator.checkNoCycleInInterfaceInheritance, validator.checkDuplicateTypeName],
         DataType: [ validator.checkTypeStartsWithCapital, validator.checkDuplicateTypeName ],
-        Enumeration: [ validator.checkTypeStartsWithCapital, validator.checkDuplicateTypeName, validator.checkDuplicateEnumerationLiteralName ],
+        Enumeration: [ validator.checkTypeStartsWithCapital, validator.checkDuplicateTypeName, validator.checkDuplicateEnumerationLiteralName, validator.checkEnumLiteralIsCapital ],
         Property: [ validator.checkPropertyStartsWithLower, validator.checkDuplicatePropertyName ],
         Operation: [ validator.checkOperationStartsWithLower, validator.checkDuplicateOperationName ],
         //Model: [ validator.checkDuplicateRootPackageName ],
@@ -51,6 +51,19 @@ export class ClassDiagramValidator {
                 accept('warning', 'Operation name should start with lowercase.', { node: o, property: 'name'});
             }
         }
+    }
+
+    checkEnumLiteralIsCapital(e: Enumeration, accept: ValidationAcceptor): void {
+        e.literals.forEach(literal => {
+            //const firstChar = literal.substring(0, 1);
+            if (!literal.match(/^[A-Z]+$/)) {
+                accept('warning', 'Enumeration literal should consist of capitals.', { node: e, property: 'literals' });
+            }
+            /*
+            if (firstChar.toUpperCase() !== firstChar) {
+                accept('warning', 'Enumeration literal should start with a capital.', { node: e, property: 'literals' });
+            }*/
+        });
     }
 
     checkNoCycleInClassInheritance(c: Class, accept: ValidationAcceptor): void {

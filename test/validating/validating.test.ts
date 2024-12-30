@@ -235,6 +235,24 @@ describe('Validating', () => {
             `)
         );
     });
+
+    test('check enum literal consists of capitals', async () => {
+        document = await parse(`
+            package de {
+                enum Test {aBC}
+            }
+        `);
+
+        console.log(document?.diagnostics?.map(diagnosticToString)?.join('\n'));
+
+        expect(
+            checkDocumentValid(document) || document?.diagnostics?.map(diagnosticToString)?.join('\n')
+        ).toEqual(
+            expect.stringContaining(s`
+                [2:27..2:30]: Enumeration literal should consist of capitals.
+            `)
+        );
+    });
 });
 
 function checkDocumentValid(document: LangiumDocument): string | undefined {

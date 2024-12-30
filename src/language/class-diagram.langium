@@ -26,7 +26,9 @@ Parameter:
     name=ID ':' type=[Type:ID];
 
 Class returns Type:
-    {infer Class} (vis=VisibilityKind)? 'class' name=ID ('extends' superClasses+=[Class:ID] (',' superClasses+=[Class:ID])*)? '{'
+    {infer Class} (vis=VisibilityKind)? 'class' name=ID 
+    ('extends' superClasses+=[Class:ID] (',' superClasses+=[Class:ID])*)? 
+    ('implements' superInterfaces+=[Interface:ID] (',' superInterfaces+=[Interface:ID])*)? '{'
         (properties+=Property | operations+=Operation)*
     '}';
 
@@ -64,7 +66,7 @@ VisibilityKind returns string:
 
 hidden terminal WS: /\s+/;
 terminal ID: /[_a-zA-Z][\w_]*/;
-terminal INT returns number: /[0-9]+/;
+terminal INT returns number: /-?[0-9]+/;
 terminal STRING: /"(\\.|[^"\\])*"|'(\\.|[^'\\])*'/;
 
 hidden terminal ML_COMMENT: /\/\*[\s\S]*?\*\//;

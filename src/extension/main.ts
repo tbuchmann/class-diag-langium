@@ -1,12 +1,29 @@
 import type { LanguageClientOptions, ServerOptions} from 'vscode-languageclient/node.js';
-import type * as vscode from 'vscode';
+import * as vscode from 'vscode';
 import * as path from 'node:path';
 import { LanguageClient, TransportKind } from 'vscode-languageclient/node.js';
+import { generateClassDiagram } from '../cli/generator.js';
+import { createClassDiagramServices } from '../language/class-diagram-module.js';
+import { extractAstNode } from '../cli/cli-util.js';
+import { NodeFileSystem } from 'langium/node';
+import { Model } from '../language/generated/ast.js';
+import chalk from 'chalk';
 
 let client: LanguageClient;
 
 // This function is called when the extension is activated.
 export function activate(context: vscode.ExtensionContext): void {
+    let disposable = vscode.workspace.onDidSaveTextDocument((document) => {
+        //const saveTime = new Date().toISOString();
+        //console.log(`[${saveTime}] File saved: ${document.fileName}`);
+        if (document.fileName.endsWith('.cdiag')) {
+            const filePath = document.fileName;
+            const directoryPath = path.dirname(filePath);
+            generateAction(document.fileName, directoryPath+'/generated');
+        }
+    });
+
+    context.subscriptions.push(disposable);
     client = startLanguageClient(context);
 }
 
@@ -17,6 +34,15 @@ export function deactivate(): Thenable<void> | undefined {
     }
     return undefined;
 }
+
+export const generateAction = async (fileName: string, destination: string): Promise<void> => {
+    const services = createClassDiagramServices(NodeFileSystem).ClassDiagram;    
+    const model = await extractAstNode<Model>(fileName, services);
+    model.packages.forEach(pkg => {
+        const generatedFilePath = generateClassDiagram(pkg, fileName, destination);
+        console.log(chalk.green(`Code generated successfully: ${generatedFilePath}`));
+    });    
+};
 
 function startLanguageClient(context: vscode.ExtensionContext): LanguageClient {
     const serverModule = context.asAbsolutePath(path.join('out', 'language', 'main.cjs'));

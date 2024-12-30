@@ -1,27 +1,11 @@
 //import type { Model } from '../language/generated/ast.js';
-import { type Enumeration, type Class, type Model, type Package, type Interface } from '../language/generated/ast.js';
-import { expandToNode, /*joinToNode,*/ toString } from 'langium/generate';
+import { type Enumeration, type Class, type Model, type Package, type Interface, Property, Association } from '../language/generated/ast.js';
+import { expandToNode, toString } from 'langium/generate';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { extractDestinationAndName } from './cli-util.js';
-/*
-export function generateJavaScript(model: Model, filePath: string, destination: string | undefined): string {
-    const data = extractDestinationAndName(filePath, destination);
-    const generatedFilePath = `${path.join(data.destination, data.name)}.js`;
+//import { vi } from 'vitest';
 
-    const fileNode = expandToNode`
-        "use strict";
-
-        ${joinToNode(model.greetings, greeting => `console.log('Hello, ${greeting.person.ref?.name}!');`, { appendNewLineIfNotEmpty: true })}
-    `.appendNewLineIfNotEmpty();
-
-    if (!fs.existsSync(data.destination)) {
-        fs.mkdirSync(data.destination, { recursive: true });
-    }
-    fs.writeFileSync(generatedFilePath, toString(fileNode));
-    return generatedFilePath;
-}
-*/
 
 export function generateCode(model: Model, filePath: string, destination: string | undefined): string {
     /*
@@ -59,7 +43,7 @@ export function generateCode(model: Model, filePath: string, destination: string
    model.packages.forEach(pkg => {
         pkg.types.forEach(type => {
             if (type.$type === 'Class') {
-                generateClass(type, pkg.name, filePath, destination);
+                generateJavaClass(type, pkg.name, filePath, destination);
             }
         });
    });   
@@ -68,11 +52,23 @@ export function generateCode(model: Model, filePath: string, destination: string
 
 export function generateClassDiagram(pkg: Package, filePath: string, destination: string) : string {
     const data = extractDestinationAndName(filePath, destination);
-    const generatedFilePath = `${path.join(data.destination, data.name)}.classdiag`;
+    const generatedFilePath = `${path.join(data.destination, data.name + pkg.name)}.classdiag`;
+
+    const visMap = new Map<string, string>();
+    visMap.set('public', '+');
+    visMap.set('protected', '#');
+    visMap.set('private', '-');
+    visMap.set('package', '~');
+
+    const assocTypeMap = new Map<string, string>();
+    assocTypeMap.set('none', '--');
+    assocTypeMap.set('shared', 'o--');
+    assocTypeMap.set('composite', '*--');
 
     let classSet = new Set<Class>();
     let enumSet = new Set<Enumeration>();
     let interfaceSet = new Set<Interface>();
+    let assocSet = new Set<Association>();
 
     pkg.types.forEach(type => {
         if (type.$type === 'Class') {
@@ -81,20 +77,28 @@ export function generateClassDiagram(pkg: Package, filePath: string, destination
             enumSet.add(type);
         }  else if (type.$type === 'Interface') {
             interfaceSet.add(type);
+        } else if (type.$type === 'Association') {
+            assocSet.add(type);
         }
     });
 
     const fileNode = expandToNode`
         @startuml
-        ${Array.from(classSet).map(clz => `
-            class ${clz.name} 
-        `).join('\n')}
-        ${Array.from(enumSet).map(enm => `
-            enum ${enm.name} 
-        `).join('\n')}
-        ${Array.from(interfaceSet).map(inf => `
-            interface ${inf.name} 
-        `).join('\n')}
+        ${Array.from(classSet).map(clz => `class ${clz.name} {                
+          ${clz.properties?.map(prop => `${visMap.get(prop.vis ?? 'package')} ${prop.name} : ${prop.type?.ref?.name} ${genCardinality(prop)}`).join('\n')}
+          ${clz.operations?.map(op => `${visMap.get(op.vis ?? 'package')} ${op.name}(${op.params.map(param => `${param.name} : ${param.type?.ref?.name}`).join(', ')}) : ${op.type?.ref?.name}`).join('\n')}
+        }`).join('\n')}
+        ${Array.from(enumSet).map(enm => `enum ${enm.name} {
+          ${enm.literals.join('\n')}
+        }`).join('\n')}
+        ${Array.from(interfaceSet).map(inf => `interface ${inf.name} {
+          ${inf.properties?.map(prop => `${visMap.get(prop.vis ?? 'package')} ${prop.name} : ${prop.type?.ref?.name} ${genCardinality(prop)}`).join('\n')}
+                ${inf.operations?.map(op => `${visMap.get(op.vis ?? 'package')} ${op.name}(${op.params.map(param => `${param.name} : ${param.type?.ref?.name}`).join(', ')}) : ${op.type?.ref?.name}`).join('\n')}
+        }`).join('\n')}
+        ${Array.from(classSet).map(clz => `${clz.superClasses?.map(superClass => `${clz.name} --|> ${superClass.ref?.name}`).join('\n')}
+        ${clz.superInterfaces?.map(superInterface => `${clz.name} ..|> ${superInterface.ref?.name}`).join('\n')}`)}
+        ${Array.from(interfaceSet).map(inf => `${inf.superInterfaces?.map(superInterface => `${inf.name} --|> ${superInterface.ref?.name}`).join('\n')}`)}
+        ${Array.from(assocSet).map(assoc => `${assoc.properties?.[0].type.ref?.name} "${assoc.properties?.[0].upper}" ${assocTypeMap.get(assoc.properties?.[0].kind ?? 'none')} ${assoc.properties?.[1].upper} ${assoc.properties?.[1].type.ref?.name} : ${assoc.name} >`).join('\n')}
         @enduml
     `.appendNewLineIfNotEmpty();
 
@@ -106,7 +110,7 @@ export function generateClassDiagram(pkg: Package, filePath: string, destination
 }
 
 
-export function generateClass(clz: Class, pkgName: string, filePath: string, destination: string | undefined): string {
+export function generateJavaClass(clz: Class, pkgName: string, filePath: string, destination: string | undefined): string {
     const data = extractDestinationAndName(filePath, destination);
     const generatedFilePath = `${path.join(data.destination, data.name)}.java`;
 
@@ -124,3 +128,20 @@ export function generateClass(clz: Class, pkgName: string, filePath: string, des
     fs.writeFileSync(generatedFilePath, toString(fileNode));
     return generatedFilePath;
 }
+
+function genCardinality(p: Property) : string {
+    if (p.lower === 0 && p.upper === 1) {
+        return '[0..1]';
+    } else if (p.lower === 0 && p.upper === -1) {
+        return '[0..*]';
+    } else if (p.lower === 1 && p.upper === -1) {
+        return '[1..*]';
+    } else {
+        //return `${p.lowerBound}..${p.upperBound}`;
+        return '';
+    }
+}
+
+// function generatePlantUMLType(type: Class | Interface | Enumeration): string {
+    
+// }
