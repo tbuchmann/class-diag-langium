@@ -73,7 +73,7 @@ export class ClassDiagramValidator {
             return;
         }
 
-        let superClassesToCheck: Reference<Class>[] = c.superClasses;
+        let superClassesToCheck: Reference<Class>[] = [...c.superClasses];
         while (superClassesToCheck.length > 0) {
             let superClass = superClassesToCheck.pop();
             if (superClass === undefined) {
@@ -96,7 +96,7 @@ export class ClassDiagramValidator {
             return;
         }
 
-        let superInterfacesToCheck: Reference<Interface>[] = i.superInterfaces;
+        let superInterfacesToCheck: Reference<Interface>[] = [...i.superInterfaces];
         while (superInterfacesToCheck.length > 0) {
             let superInterface = superInterfacesToCheck.pop();
             if (superInterface === undefined) {
