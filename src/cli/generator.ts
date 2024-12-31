@@ -1,4 +1,4 @@
-import { type Enumeration, type Class, type Model, type Package, type Interface, Property, Association, PrimitiveType, DataType } from '../language/generated/ast.js';
+import { type Enumeration, type Class, type Model, type Package, type Interface, Property, Association, PrimitiveType, DataType, TypedElement, Operation } from '../language/generated/ast.js';
 import { expandToNode, toString } from 'langium/generate';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
@@ -64,20 +64,20 @@ export function generateClassDiagram(pkg: Package, filePath: string, destination
     const fileNode = expandToNode`
         @startuml
         ${Array.from(classSet).map(clz => `class ${clz.name} {                
-          ${clz.properties?.map(prop => `${visMap.get(prop.vis ?? 'package')} ${prop.name} : ${prop.type?.ref?.name} ${genCardinality(prop)}`).join('\n')}
-          ${clz.operations?.map(op => `${visMap.get(op.vis ?? 'package')} ${op.name}(${op.params.map(param => `${param.name} : ${param.type?.ref?.name}`).join(', ')}) : ${op.type?.ref?.name}`).join('\n')}
+          ${clz.properties?.map(prop => `${visMap.get((prop as Property).vis ?? 'package')} ${prop.name} : ${prop.type?.ref?.name} ${genCardinality(prop as Property)}`).join('\n')}
+          ${clz.operations?.map(op => `${visMap.get((op as Operation).vis ?? 'package')} ${op.name}(${(op as Operation).params.map(param => `${param.name} : ${param.type?.ref?.name}`).join(', ')}) : ${op.type?.ref?.name}`).join('\n')}
         }`).join('\n')}
         ${Array.from(enumSet).map(enm => `enum ${enm.name} {
           ${enm.literals.join('\n')}
         }`).join('\n')}
         ${Array.from(interfaceSet).map(inf => `interface ${inf.name} {
-          ${inf.properties?.map(prop => `${visMap.get(prop.vis ?? 'package')} ${prop.name} : ${prop.type?.ref?.name} ${genCardinality(prop)}`).join('\n')}
-                ${inf.operations?.map(op => `${visMap.get(op.vis ?? 'package')} ${op.name}(${op.params.map(param => `${param.name} : ${param.type?.ref?.name}`).join(', ')}) : ${op.type?.ref?.name}`).join('\n')}
+          ${inf.properties?.map(prop => `${visMap.get((prop as Property).vis ?? 'package')} ${prop.name} : ${prop.type?.ref?.name} ${genCardinality(prop as Property)}`).join('\n')}
+                ${inf.operations?.map(op => `${visMap.get((op as Operation).vis ?? 'package')} ${op.name}(${(op as Operation).params.map(param => `${param.name} : ${param.type?.ref?.name}`).join(', ')}) : ${op.type?.ref?.name}`).join('\n')}
         }`).join('\n')}
         ${Array.from(classSet).map(clz => genSuperClasses(clz)).join('\n')}
         ${Array.from(classSet).map(clz => genImplementingInterfaces(clz)).join('\n')}
         ${Array.from(interfaceSet).map(inf => genSuperInterfaces(inf)).join('\n')}
-        ${Array.from(assocSet).map(assoc => `${assoc.properties?.[0].type.ref?.name} "${assoc.properties?.[0].upper ?? 1}" ${assocTypeMap.get(assoc.properties?.[0].kind ?? 'none')} "${assoc.properties?.[1].upper ?? 1}" ${assoc.properties?.[1].type.ref?.name} : ${assoc.name} >`).join('\n')}
+        ${Array.from(assocSet).map(assoc => `${assoc.properties?.[0].type?.ref?.name} "${assoc.properties?.[0].upper ?? 1}" ${assocTypeMap.get((assoc.properties?.[0] as Property).kind ?? 'none')} "${assoc.properties?.[1].upper ?? 1}" ${assoc.properties?.[1].type?.ref?.name} : ${assoc.name} >`).join('\n')}
         @enduml
     `.appendNewLineIfNotEmpty();
 
@@ -93,13 +93,23 @@ export function generateJavaClass(clz: Class, pkgName: string, filePath: string,
     const data = extractDestinationAndName(filePath, destination + "/" + getQualifiedName(clz.$container, '/'));
     const generatedFilePath = `${path.join(data.destination, clz.name)}.java`;
 
+    const hasMultipleProperties = clz.properties?.some(prop => prop.upper !== undefined && prop.upper > 1) || clz.operations?.some(op => op.upper !== undefined && op.upper > 1);
+
     const fileNode = expandToNode`
         package ${getQualifiedName(clz.$container, '.')};
+        ${hasMultipleProperties ? `import java.util.List;\nimport java.util.ArrayList;` : ''}
 
         public class ${clz.name} ${printExtendsAndImplements(clz)} {
-            ${clz.properties?.map(prop => `${prop.vis ?? ''} ${prop.type?.ref?.name} ${prop.name};`).join('\n')}
+            // generated properties
+            ${clz.properties?.map(prop => `${(prop as Property).vis ?? ''} ${printType(prop)} ${prop.name}${prop.upper !== undefined && prop.upper > 1 ? ' = new ArrayList<'+prop.type?.ref?.name+ '>()' :''};`).join('\n')}
+            // end of generated properties
 
-            ${clz.operations?.map(op => `${op.vis ?? ''} ${op.type?.ref?.name ?? 'void'} ${op.name}(${op.params.map(param => `${param.type?.ref?.name} ${param.name}`).join(', ')}) {}`).join('\n')}
+            // generated getters and setters
+            ${clz.properties?.map(prop => `${genGetter(prop as Property)}\n${genSetter(prop as Property)}`).join('\n')}
+            // end of generated getters and setters
+
+            // generated operations
+            ${clz.operations?.map(op => `${(op as Operation).vis ?? ''} ${op.type === undefined ? 'void' : printType(op)} ${op.name}(${(op as Operation).params.map(param => `${printType(param)} ${param.name}`).join(', ')}) {}`).join('\n')}
         }
     `.appendNewLineIfNotEmpty();
 
@@ -118,9 +128,9 @@ export function generateJavaInterface(inf: Interface, pkgName: string, filePath:
         package ${getQualifiedName(inf.$container, '.')};
 
         public interface ${inf.name} ${printExtends(inf)} {
-            ${inf.properties?.map(prop => `${prop.type?.ref?.name} ${prop.name} = null;`).join('\n')}
+            ${inf.properties?.map(prop => `${printType(prop)} ${prop.name} = null;`).join('\n')}
 
-            ${inf.operations?.map(op => `${op.type?.ref?.name ?? 'void'} ${op.name}(${op.params.map(param => `${param.type?.ref?.name} ${param.name}`).join(', ')});`).join('\n')}
+            ${inf.operations?.map(op => `${op.type?.ref?.name ?? 'void'} ${op.name}(${(op as Operation).params.map(param => `${param.type?.ref?.name} ${param.name}`).join(', ')});`).join('\n')}
         }
     `.appendNewLineIfNotEmpty();
 
@@ -176,5 +186,25 @@ function printExtendsAndImplements(type: Class) : string {
 
 function printExtends(type: Interface): string {
     return type.superInterfaces?.map(superInterface => `extends ${superInterface.ref?.name}`).join(', ');
+}
+
+function genGetter(p: Property): string {
+    const gen = `${p.vis ?? ''} ${printType(p)} get${p.name.charAt(0).toUpperCase() + p.name.slice(1)}() {
+        return this.${p.name};
+    }`;
+    return gen;
+}
+
+function genSetter(p: Property): string {
+    const gen = `${p.vis ?? ''} void set${p.name.charAt(0).toUpperCase() + p.name.slice(1)}(${printType(p)} ${p.name}) {
+        this.${p.name} = ${p.name};
+    }`;
+    return gen;
+}
+
+function printType(t: TypedElement): string {
+    const gen = `${t.upper !== undefined && t.upper !== 1 ? 'List<' + t.type?.ref?.name + '>': t.type?.ref?.name}`;
+
+    return gen;
 }
 

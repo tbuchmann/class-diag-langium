@@ -163,8 +163,8 @@ describe('Parsing tests', () => {
                 class A {}
                 class B {}
                 assoc contains {
-                    a : A 0..1 
-                    b : B 0..-1 composite +
+                    a : A [0..1] 
+                    b : B [0..-1] composite +
                 }
             }
         `);         

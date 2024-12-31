@@ -82,8 +82,9 @@ export class ClassDiagramValidator {
 
             if (superClasses.has(superClass.ref as Class)) {
                 accept('error', 'Cycle in class inheritance', { node: c, property: 'superClasses'});
+                return;
             }
-            superClasses.add(superClass.ref as Class);
+            superClasses.add(superClass.ref as Class);            
             superClassesToCheck.push(...(superClass.ref as Class).superClasses || []);            
         }            
     }
@@ -105,6 +106,7 @@ export class ClassDiagramValidator {
 
             if (superInterfaces.has(superInterface.ref as Interface)) {
                 accept('error', 'Cycle in interface inheritance', { node: i, property: 'superInterfaces'});
+                return;
             }
             superInterfaces.add(superInterface.ref as Interface);
             superInterfacesToCheck.push(...(superInterface.ref as Interface).superInterfaces || []);            
@@ -120,19 +122,23 @@ export class ClassDiagramValidator {
     }
 
     checkDuplicatePropertyName(p: Property, accept: ValidationAcceptor): void {        
-        p.$container?.properties.forEach(property => {
-            if (property !== p && property.name === p.name) {
-                accept('error', `Duplicate property name '${p.name}'.`, { node: p, property: 'name' });
-            }
-        });
+        if ('properties' in p.$container) {
+            p.$container?.properties.forEach(property => {
+                if (property !== p && property.name === p.name) {
+                    accept('error', `Duplicate property name '${p.name}'.`, { node: p, property: 'name' });
+                }
+            });
+        }
     }
 
     checkDuplicateOperationName(o: Operation, accept: ValidationAcceptor): void {        
-        o.$container?.operations.forEach(operation => {
-            if (operation !== o && operation.name === o.name) {
-                accept('error', `Duplicate operation name '${o.name}'.`, { node: o, property: 'name' });
-            }
-        });
+        if ('operations' in o.$container) {
+            o.$container?.operations.forEach(operation => {
+                if (operation !== o && operation.name === o.name) {
+                    accept('error', `Duplicate operation name '${o.name}'.`, { node: o, property: 'name' });
+                }
+            });
+        }
     }
     
     checkDuplicateEnumerationLiteralName(e: Enumeration, accept: ValidationAcceptor): void {        

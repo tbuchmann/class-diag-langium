@@ -11,19 +11,19 @@ Package:
         (packages+=Package | types+=(Class|Interface|DataType|PrimitiveType|Enumeration|Association) )*
     '}';
 
-TypedElement:
-    Property | Operation;
+type TypedElement =
+    Property | Operation | Parameter;
 
-Property:
-    (vis=VisibilityKind)? name=ID ':' type=[Type:ID] (lower=INT '..' upper=INT)? (kind=AggregationKind)? (navigable?='+')?
+Property returns TypedElement:
+    {infer Property} (vis=VisibilityKind)? name=ID ':' type=[Type:ID] ('[' lower=INT '..' upper=INT ']')? (kind=AggregationKind)? (navigable?='+')?
     ;
 
-Operation:
-    (vis=VisibilityKind)? name=ID '(' params+=Parameter* ')' (':' type=[Type:ID])?
+Operation returns TypedElement:
+    {infer Operation} (vis=VisibilityKind)? name=ID '(' params+=Parameter* ')' (':' type=[Type:ID] ('[' lower=INT '..' upper=INT ']')?)?
     ;
 
-Parameter:
-    name=ID ':' type=[Type:ID];
+Parameter returns TypedElement:
+    {infer Parameter} name=ID ':' type=[Type:ID] ('[' lower=INT '..' upper=INT ']')?;
 
 Class returns Type:
     {infer Class} (vis=VisibilityKind)? 'class' name=ID 
