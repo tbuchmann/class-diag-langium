@@ -84,8 +84,8 @@ export function generateClassDiagram(pkg: Package, filePath: string, destination
     const fileNode = expandToNode`
         @startuml
         ${Array.from(classSet).map(clz => `${clz.abstract ? 'abstract ' : ''}class ${clz.name} {                
-          ${clz.properties?.map(prop => `${visMap.get((prop as Property).vis ?? 'package')} ${(prop as Property).static ? 'static' : ''} ${prop.name} : ${prop.type?.ref?.name} ${genCardinality(prop as Property)}`).join('\n')}
-          ${clz.operations?.map(op => `${visMap.get((op as Operation).vis ?? 'package')} ${(op as Operation).static ? 'static' : ''} ${(op as Operation).abstract ? 'abstract' : ''} ${op.name}(${(op as Operation).params.map(param => `${param.name} : ${param.type?.ref?.name}`).join(', ')}) : ${op.type?.ref?.name}`).join('\n')}
+          ${clz.properties?.map(prop => `${visMap.get((prop as Property).vis ?? 'package')} ${(prop as Property).static ? '{static}' : ''} ${prop.name} : ${prop.type?.ref?.name} ${genCardinality(prop as Property)}`).join('\n')}
+          ${clz.operations?.map(op => `${visMap.get((op as Operation).vis ?? 'package')} ${(op as Operation).static ? '{static}' : ''} ${(op as Operation).abstract ? '{abstract}' : ''} ${op.name}(${(op as Operation).params.map(param => `${param.name} : ${param.type?.ref?.name}`).join(', ')}) : ${op.type?.ref?.name}`).join('\n')}
         }`).join('\n')}
         ${Array.from(enumSet).map(enm => `enum ${enm.name} {
           ${enm.literals.join('\n')}
