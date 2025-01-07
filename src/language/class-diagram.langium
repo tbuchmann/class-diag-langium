@@ -15,11 +15,11 @@ type TypedElement =
     Property | Operation | Parameter;
 
 Property returns TypedElement:
-    {infer Property} (vis=VisibilityKind)? name=ID ':' type=[Type:ID] ('[' lower=INT '..' upper=INT ']')? (kind=AggregationKind)? (navigable?='+')?
+    {infer Property} (vis=VisibilityKind)? (static?='static')? name=ID ':' type=[Type:ID] ('[' lower=INT '..' upper=INT ']')? (kind=AggregationKind)? (navigable?='+')?
     ;
 
 Operation returns TypedElement:
-    {infer Operation} (vis=VisibilityKind)? name=ID '(' params+=Parameter* ')' (':' type=[Type:ID] ('[' lower=INT '..' upper=INT ']')?)?
+    {infer Operation} (vis=VisibilityKind)? (static?='static')? name=ID '(' params+=Parameter* ')' (':' type=[Type:ID] ('[' lower=INT '..' upper=INT ']')?)?
     ;
 
 Parameter returns TypedElement:
