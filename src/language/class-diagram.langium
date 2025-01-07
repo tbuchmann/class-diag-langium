@@ -26,7 +26,7 @@ Parameter returns TypedElement:
     {infer Parameter} name=ID ':' type=[Type:ID] ('[' lower=INT '..' upper=INT ']')?;
 
 Class returns Type:
-    {infer Class} (vis=VisibilityKind)? 'class' name=ID 
+    {infer Class} (vis=VisibilityKind)? (abstract?='abstract')? 'class' name=ID 
     ('extends' superClasses+=[Class:ID] (',' superClasses+=[Class:ID])*)? 
     ('implements' superInterfaces+=[Interface:ID] (',' superInterfaces+=[Interface:ID])*)? '{'
         (properties+=Property | operations+=Operation)*

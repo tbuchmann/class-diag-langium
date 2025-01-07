@@ -49,6 +49,26 @@ describe('Parsing tests', () => {
         `);        
     });
 
+    test('parse model with abstract class', async () => {
+        document = await parse(`
+            package de {
+                abstract class Test {}
+            }
+        `);        
+
+        expect(document.parseResult.parserErrors).toHaveLength(0);
+
+        expect(
+            checkDocumentValid(document) || s`
+            Class:
+              ${document.parseResult.value?.packages?.[0].types?.[0].name} ${(document.parseResult.value?.packages?.[0].types?.[0] as Class).abstract ? 'abstract' : ''}
+            `
+        ).toBe(s`
+            Class:
+              Test abstract
+        `);
+    });
+
     test('parse model with nested packages', async () => {
         document = await parse(`
             package de {
