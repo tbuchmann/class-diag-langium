@@ -19,7 +19,7 @@ Property returns TypedElement:
     ;
 
 Operation returns TypedElement:
-    {infer Operation} (vis=VisibilityKind)? (static?='static')? name=ID '(' params+=Parameter* ')' (':' type=[Type:ID] ('[' lower=INT '..' upper=INT ']')?)?
+    {infer Operation} (vis=VisibilityKind)? (static?='static')? (abstract?='abstract')? name=ID '(' params+=Parameter* ')' (':' type=[Type:ID] ('[' lower=INT '..' upper=INT ']')?)?
     ;
 
 Parameter returns TypedElement:
