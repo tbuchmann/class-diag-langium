@@ -17,6 +17,14 @@ export function generateCode(model: Model, filePath: string, destination: string
    return destination || '';
 }
 
+export function generateDiagrams(model: Model, filePath: string, destination: string | undefined): string {
+    const allPkgs = collectAllPackages(model);
+    allPkgs.forEach(pkg => { if (pkg.types.length > 0) generateClassDiagram(pkg, filePath, destination);        
+    });
+
+    return destination || '';
+}
+
 function collectAllTypes(model: Model): Array<Class | DataType | PrimitiveType | Enumeration | Interface | Association> {
     const types: Array<Class | DataType | PrimitiveType | Enumeration | Interface | Association> = [];
 
@@ -29,9 +37,21 @@ function collectAllTypes(model: Model): Array<Class | DataType | PrimitiveType |
     return types;
 }
 
-export function generateClassDiagram(pkg: Package, filePath: string, destination: string) : string {
+function collectAllPackages(model: Model) : Array<Package> {
+    const pkgs: Array<Package> = [];
+
+    function collect(pkg: Package) {
+        pkgs.push(pkg);
+        pkg.packages.forEach(subPkg => collect(subPkg));
+    }
+
+    model.packages.forEach(pkg => collect(pkg));
+    return pkgs;
+}
+
+export function generateClassDiagram(pkg: Package, filePath: string, destination: string | undefined) : string {
     const data = extractDestinationAndName(filePath, destination);
-    const generatedFilePath = `${path.join(data.destination, data.name + pkg.name)}.classdiag`;
+    const generatedFilePath = `${path.join(data.destination, data.name + getQualifiedName(pkg, "."))}.classdiag`;
 
     const visMap = new Map<string, string>();
     visMap.set('public', '+');

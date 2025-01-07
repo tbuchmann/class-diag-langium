@@ -2,7 +2,7 @@ import type { LanguageClientOptions, ServerOptions} from 'vscode-languageclient/
 import * as vscode from 'vscode';
 import * as path from 'node:path';
 import { LanguageClient, TransportKind } from 'vscode-languageclient/node.js';
-import { generateClassDiagram, generateCode } from '../cli/generator.js';
+import { generateDiagrams, generateCode } from '../cli/generator.js';
 import { createClassDiagramServices } from '../language/class-diagram-module.js';
 import { extractAstNode } from '../cli/cli-util.js';
 import { NodeFileSystem } from 'langium/node';
@@ -52,10 +52,13 @@ export function deactivate(): Thenable<void> | undefined {
 export const generateAction = async (fileName: string, destination: string): Promise<void> => {
     const services = createClassDiagramServices(NodeFileSystem).ClassDiagram;    
     const model = await extractAstNode<Model>(fileName, services);
+    /*
     model.packages.forEach(pkg => {
         const generatedFilePath = generateClassDiagram(pkg, fileName, destination);
         console.log(chalk.green(`Code generated successfully: ${generatedFilePath}`));
-    });    
+    });*/
+    const generatedFilePath = generateDiagrams(model, fileName, destination);
+    console.log(chalk.green(`Code generated successfully: ${generatedFilePath}`));
 };
 
 export const generateCodeAction = async (fileName: string, destination: string): Promise<void> => {
