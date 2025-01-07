@@ -83,7 +83,7 @@ export function generateClassDiagram(pkg: Package, filePath: string, destination
 
     const fileNode = expandToNode`
         @startuml
-        ${Array.from(classSet).map(clz => `class ${clz.name} {                
+        ${Array.from(classSet).map(clz => `${clz.abstract ? 'abstract ' : ''}class ${clz.name} {                
           ${clz.properties?.map(prop => `${visMap.get((prop as Property).vis ?? 'package')} ${prop.name} : ${prop.type?.ref?.name} ${genCardinality(prop as Property)}`).join('\n')}
           ${clz.operations?.map(op => `${visMap.get((op as Operation).vis ?? 'package')} ${op.name}(${(op as Operation).params.map(param => `${param.name} : ${param.type?.ref?.name}`).join(', ')}) : ${op.type?.ref?.name}`).join('\n')}
         }`).join('\n')}
@@ -119,7 +119,7 @@ export function generateJavaClass(clz: Class, pkgName: string, filePath: string,
         package ${getQualifiedName(clz.$container, '.')};
         ${hasMultipleProperties ? `import java.util.List;\nimport java.util.ArrayList;` : ''}
 
-        public class ${clz.name} ${printExtendsAndImplements(clz)} {
+        public ${clz.abstract ? 'abstract ':''}class ${clz.name} ${printExtendsAndImplements(clz)} {
             // generated properties
             ${clz.properties?.map(prop => `${(prop as Property).vis ?? ''} ${printType(prop)} ${prop.name}${prop.upper !== undefined && prop.upper > 1 ? ' = new ArrayList<'+prop.type?.ref?.name+ '>()' :''};`).join('\n')}
             // end of generated properties
