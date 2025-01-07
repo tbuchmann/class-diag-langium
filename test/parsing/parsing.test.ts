@@ -3,7 +3,7 @@ import { EmptyFileSystem, type LangiumDocument } from "langium";
 import { expandToString as s } from "langium/generate";
 import { parseHelper } from "langium/test";
 import { createClassDiagramServices } from "../../src/language/class-diagram-module.js";
-import { Association, Class, Interface, Model, isModel } from "../../src/language/generated/ast.js";
+import { Association, Class, Interface, Model, Property, isModel } from "../../src/language/generated/ast.js";
 import type { Diagnostic } from "vscode-languageserver-types";
 
 let services: ReturnType<typeof createClassDiagramServices>;
@@ -66,6 +66,37 @@ describe('Parsing tests', () => {
         ).toBe(s`
             Class:
               Test abstract
+        `);
+    });
+
+    test('parse model with static properties and operations', async () => {
+        document = await parse(`
+            package de {
+                class Test {
+                    static a : Integer
+                    static doSmth(test : String) : Integer
+                }
+            }
+        `);        
+
+        expect(document.parseResult.parserErrors).toHaveLength(0);
+
+        expect(
+            checkDocumentValid(document) || s`
+            Class:
+              ${document.parseResult.value?.packages?.[0].types?.[0].name}
+            Static Properties:
+              ${(document.parseResult.value?.packages?.[0].types?.[0] as Class).properties?.filter(p => p.$type == 'Property' && p.static).map(p => p.name)?.join('\n')}
+            Static Operations:
+              ${(document.parseResult.value?.packages?.[0].types?.[0] as Class).operations?.filter(o => o.$type == 'Operation' && o.static).map(o => o.name)?.join('\n')}
+            `
+        ).toBe(s`
+            Class:
+              Test
+            Static Properties:
+              a
+            Static Operations:
+              doSmth
         `);
     });
 
