@@ -3,7 +3,7 @@ import { EmptyFileSystem, type LangiumDocument } from "langium";
 import { expandToString as s } from "langium/generate";
 import { clearDocuments, parseHelper } from "langium/test";
 import { createClassDiagramServices } from "../../src/language/class-diagram-module.js";
-import { Model, isModel } from "../../src/language/generated/ast.js";
+import { Class, Model, isModel } from "../../src/language/generated/ast.js";
 
 let services: ReturnType<typeof createClassDiagramServices>;
 let parse:    ReturnType<typeof parseHelper<Model>>;
@@ -39,9 +39,11 @@ describe('Linking tests', () => {
             // and then evaluate the cross references we're interested in by checking
             //  the referenced AST element as well as for a potential error message;
             checkDocumentValid(document)
-                /*|| document.parseResult.value.packages.map(p => p.types?.entries.name || g.person.error?.message).join('\n')*/
+                || (document.parseResult.value.packages?.[0].types?.[1] as Class).properties?.[0].type?.ref?.name
+                || (document.parseResult.value.packages?.[0].types?.[1] as Class).properties?.[0].type?.error?.message
+                //map(p => (p.types?.[1] as Class).properties?.[0].type?.ref?.name || (p.types?.[1] as Class).properties?.[0].type.error?.message).join('\n')*/
         ).toBe(s`
-            String
+            Could not resolve reference to Type named 'String'.
         `);
     });
 });
