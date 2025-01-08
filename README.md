@@ -1,3 +1,5 @@
+[![Node.js CI](https://github.com/tbuchmann/class-diag-langium/actions/workflows/node.js.yml/badge.svg)](https://github.com/tbuchmann/class-diag-langium/actions/workflows/node.js.yml)
+
 # DSL for modeling class diagrams
 
 ## created with langium
