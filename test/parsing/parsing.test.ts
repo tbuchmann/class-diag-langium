@@ -3,7 +3,7 @@ import { EmptyFileSystem, type LangiumDocument } from "langium";
 import { expandToString as s } from "langium/generate";
 import { parseHelper } from "langium/test";
 import { createClassDiagramServices } from "../../src/language/class-diagram-module.js";
-import { Association, Class, Interface, Model, Property, isModel } from "../../src/language/generated/ast.js";
+import { Association, Class, Interface, Model, isModel } from "../../src/language/generated/ast.js";
 import type { Diagnostic } from "vscode-languageserver-types";
 
 let services: ReturnType<typeof createClassDiagramServices>;
@@ -227,7 +227,7 @@ describe('Parsing tests', () => {
             Classes:
               ${(document.parseResult.value?.packages?.[0].types as Class[]).map(c => c.name)?.join('\n')}
             Associations:
-              ${(document.parseResult.value?.packages?.[0].types?.[2] as Association).properties?.map(a => a.name + ":" + a.type.ref?.name)?.join('\n')}
+              ${(document.parseResult.value?.packages?.[0].types?.[2] as Association).properties?.map(a => a.name + ":" + a.type?.ref?.name)?.join('\n')}
             `
         ).toBe(s`
             Classes:
@@ -310,6 +310,6 @@ function checkDocumentValid(document: LangiumDocument): string | undefined {
         || undefined;
 }
 
-function diagnosticToString(d: Diagnostic) {
+function diagnosticToString(d: Diagnostic) : string {
     return `[${d.range.start.line}:${d.range.start.character}..${d.range.end.line}:${d.range.end.character}]: ${d.message}`;
 }

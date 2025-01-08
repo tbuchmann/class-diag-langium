@@ -11,6 +11,8 @@ export function generateCode(model: Model, filePath: string, destination: string
             generateJavaClass(type, type.$container.name, filePath, destination);
         } else if (type.$type === 'Interface') {
             generateJavaInterface(type, type.$container.name, filePath, destination);
+        } else if (type.$type === 'DataType') {
+            generateJavaRecord(type, type.$container.name, filePath, destination);
         }
     });    
    
@@ -68,6 +70,8 @@ export function generateClassDiagram(pkg: Package, filePath: string, destination
     const enumSet = new Set<Enumeration>();
     const interfaceSet = new Set<Interface>();
     const assocSet = new Set<Association>();
+    const dtSet = new Set<DataType>();
+    const ptSet = new Set<PrimitiveType>();
 
     pkg.types.forEach(type => {
         if (type.$type === 'Class') {
@@ -78,11 +82,19 @@ export function generateClassDiagram(pkg: Package, filePath: string, destination
             interfaceSet.add(type);
         } else if (type.$type === 'Association') {
             assocSet.add(type);
+        } else if (type.$type === 'DataType') {
+            dtSet.add(type);
+        } else if (type.$type === 'PrimitiveType') {
+            ptSet.add(type);
         }
     });
 
     const fileNode = expandToNode`
         @startuml
+        ${Array.from(ptSet).map(pt => `class ${pt.name} <<PrimitiveType>>`).join('\n')}
+        ${Array.from(dtSet).map(dt => `class ${dt.name} <<DataType>> {                
+            ${dt.properties?.map(prop => `${visMap.get((prop as Property).vis ?? 'package')} ${(prop as Property).static ? '{static}' : ''} ${prop.name} : ${prop.type?.ref?.name} ${genCardinality(prop as Property)}`).join('\n')}            
+          }`).join('\n')}
         ${Array.from(classSet).map(clz => `${clz.abstract ? 'abstract ' : ''}class ${clz.name} {                
           ${clz.properties?.map(prop => `${visMap.get((prop as Property).vis ?? 'package')} ${(prop as Property).static ? '{static}' : ''} ${prop.name} : ${prop.type?.ref?.name} ${genCardinality(prop as Property)}`).join('\n')}
           ${clz.operations?.map(op => `${visMap.get((op as Operation).vis ?? 'package')} ${(op as Operation).static ? '{static}' : ''} ${(op as Operation).abstract ? '{abstract}' : ''} ${op.name}(${(op as Operation).params.map(param => `${param.name} : ${param.type?.ref?.name}`).join(', ')}) : ${op.type?.ref?.name}`).join('\n')}
@@ -98,6 +110,9 @@ export function generateClassDiagram(pkg: Package, filePath: string, destination
         ${Array.from(classSet).map(clz => genImplementingInterfaces(clz)).join('\n')}
         ${Array.from(interfaceSet).map(inf => genSuperInterfaces(inf)).join('\n')}
         ${Array.from(assocSet).map(assoc => `${assoc.properties?.[0].type?.ref?.name} "${assoc.properties?.[0].upper ?? 1}" ${assocTypeMap.get((assoc.properties?.[0] as Property).kind ?? 'none')} "${assoc.properties?.[1].upper ?? 1}" ${assoc.properties?.[1].type?.ref?.name} : ${assoc.name} >`).join('\n')}
+        ${(dtSet.size > 0) ? `hide <<DataType>> circle` : ''}
+        ${(ptSet.size > 0) ? `hide <<PrimitiveType>> circle` : ''}
+        ${(ptSet.size > 0) ? `hide <<PrimitiveType>> members` : ''}
         @enduml
     `.appendNewLineIfNotEmpty();
 
@@ -121,7 +136,7 @@ export function generateJavaClass(clz: Class, pkgName: string, filePath: string,
 
         public ${clz.abstract ? 'abstract ':''}class ${clz.name} ${printExtendsAndImplements(clz)} {
             // generated properties
-            ${clz.properties?.map(prop => `${(prop as Property).vis ?? ''} ${printType(prop)} ${prop.name}${prop.upper !== undefined && prop.upper > 1 ? ' = new ArrayList<'+prop.type?.ref?.name+ '>()' :''};`).join('\n')}
+            ${clz.properties?.map(prop => `${(prop as Property).vis ?? ''}${(prop as Property).static ? ' static' : ''} ${printType(prop)} ${prop.name}${prop.upper !== undefined && prop.upper > 1 ? ' = new ArrayList<'+prop.type?.ref?.name+ '>()' :''};`).join('\n')}
             // end of generated properties
 
             // generated getters and setters
@@ -129,7 +144,7 @@ export function generateJavaClass(clz: Class, pkgName: string, filePath: string,
             // end of generated getters and setters
 
             // generated operations
-            ${clz.operations?.map(op => `${(op as Operation).vis ?? ''} ${op.type === undefined ? 'void' : printType(op)} ${op.name}(${(op as Operation).params.map(param => `${printType(param)} ${param.name}`).join(', ')}) {}`).join('\n')}
+            ${clz.operations?.map(op => `${(op as Operation).vis ?? ''}${(op as Operation).static ? ' static' : ''}${(op as Operation).abstract ? ' abstract' : ''} ${op.type === undefined ? 'void' : printType(op)} ${op.name}(${(op as Operation).params.map(param => `${printType(param)} ${param.name}`).join(', ')})${(op as Operation).abstract ? ';' : ' {}'}`).join('\n')}
         }
     `.appendNewLineIfNotEmpty();
 
@@ -150,7 +165,7 @@ export function generateJavaInterface(inf: Interface, pkgName: string, filePath:
         public interface ${inf.name} ${printExtends(inf)} {
             ${inf.properties?.map(prop => `${printType(prop)} ${prop.name} = null;`).join('\n')}
 
-            ${inf.operations?.map(op => `${op.type?.ref?.name ?? 'void'} ${op.name}(${(op as Operation).params.map(param => `${param.type?.ref?.name} ${param.name}`).join(', ')});`).join('\n')}
+            ${inf.operations?.map(op => `${op.type === undefined ? 'void' : printType(op)} ${op.name}(${(op as Operation).params.map(param => `${printType(param)} ${param.name}`).join(', ')});`).join('\n')}
         }
     `.appendNewLineIfNotEmpty();
 
@@ -209,14 +224,14 @@ function printExtends(type: Interface): string {
 }
 
 function genGetter(p: Property): string {
-    const gen = `${p.vis ?? ''} ${printType(p)} get${p.name.charAt(0).toUpperCase() + p.name.slice(1)}() {
+    const gen = `${p.vis ?? ''}${p.static ? ' static' : ''} ${printType(p)} get${p.name.charAt(0).toUpperCase() + p.name.slice(1)}() {
         return this.${p.name};
     }`;
     return gen;
 }
 
 function genSetter(p: Property): string {
-    const gen = `${p.vis ?? ''} void set${p.name.charAt(0).toUpperCase() + p.name.slice(1)}(${printType(p)} ${p.name}) {
+    const gen = `${p.vis ?? ''}${p.static ? ' static' : ''} void set${p.name.charAt(0).toUpperCase() + p.name.slice(1)}(${printType(p)} ${p.name}) {
         this.${p.name} = ${p.name};
     }`;
     return gen;
@@ -226,5 +241,22 @@ function printType(t: TypedElement): string {
     const gen = `${t.upper !== undefined && t.upper !== 1 ? 'List<' + t.type?.ref?.name + '>': t.type?.ref?.name}`;
 
     return gen;
+}
+
+function generateJavaRecord(type: DataType, name: string, filePath: string, destination: string | undefined) {
+    const data = extractDestinationAndName(filePath, destination + "/" + getQualifiedName(type.$container, '/'));
+    const generatedFilePath = `${path.join(data.destination, type.name)}.java`;
+
+    const fileNode = expandToNode`
+        package ${getQualifiedName(type.$container, '.')};
+
+        public record ${type.name}(${type.properties?.map(prop => `${printType(prop)} ${prop.name}`).join(', ')}) {}
+    `.appendNewLineIfNotEmpty();
+
+    if (!fs.existsSync(data.destination)) {
+        fs.mkdirSync(data.destination, { recursive: true });
+    }
+    fs.writeFileSync(generatedFilePath, toString(fileNode));
+    return generatedFilePath;
 }
 
