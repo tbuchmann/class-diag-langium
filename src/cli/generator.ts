@@ -224,14 +224,14 @@ function printExtends(type: Interface): string {
 }
 
 function genGetter(p: Property): string {
-    const gen = `${p.vis ?? ''}${p.static ? ' static' : ''} ${printType(p)} get${p.name.charAt(0).toUpperCase() + p.name.slice(1)}() {
+    const gen = `public${p.static ? ' static' : ''} ${printType(p)} get${p.name.charAt(0).toUpperCase() + p.name.slice(1)}() {
         return this.${p.name};
     }`;
     return gen;
 }
 
 function genSetter(p: Property): string {
-    const gen = `${p.vis ?? ''}${p.static ? ' static' : ''} void set${p.name.charAt(0).toUpperCase() + p.name.slice(1)}(${printType(p)} ${p.name}) {
+    const gen = `public${p.static ? ' static' : ''} void set${p.name.charAt(0).toUpperCase() + p.name.slice(1)}(${printType(p)} ${p.name}) {
         this.${p.name} = ${p.name};
     }`;
     return gen;
