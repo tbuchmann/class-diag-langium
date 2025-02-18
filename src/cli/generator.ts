@@ -1,4 +1,4 @@
-import { type Enumeration, type Class, type Model, type Package, type Interface, Property, Association, PrimitiveType, DataType, TypedElement, Operation } from '../language/generated/ast.js';
+import { type Enumeration, type Class, type Model, type Package, type Interface, Property, type Type, type Association, PrimitiveType, DataType, TypedElement, Operation } from '../language/generated/ast.js';
 import { expandToNode, toString } from 'langium/generate';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
@@ -49,6 +49,41 @@ function collectAllPackages(model: Model) : Array<Package> {
 
     model.packages.forEach(pkg => collect(pkg));
     return pkgs;
+}
+
+/**
+ * Used for code generation: Determines, whether the given class has any associations with other classes.
+ * @param model 
+ * @param clz 
+ * @returns array with matching associations
+ */
+function collectAllAssociations(model: Model, clz: Class) : Array<Association> {
+    const assocs: Array<Association> = [];
+
+    function collect(pkg: Package) {
+        pkg.types.forEach(type => {
+            if (type.$type === 'Association' && (type as Association).properties?.some(prop => prop.type?.ref === clz)) {
+                assocs.push(type);
+            }
+        });
+        pkg.packages.forEach(subPkg => collect(subPkg));
+    }
+
+    model.packages.forEach(pkg => collect(pkg));
+    return assocs;
+}
+
+function findRoot(type: Type) : Model {    
+    let model: Model = {} as Model;
+    let current: Package | undefined = type.$container;
+    while (current !== undefined) {
+        if (current.$container.$type === 'Model') {
+            model = current.$container;
+            break;
+        }
+        current = current.$container;
+    }
+    return model;
 }
 
 export function generateClassDiagram(pkg: Package, filePath: string, destination: string | undefined) : string {
@@ -130,18 +165,39 @@ export function generateJavaClass(clz: Class, pkgName: string, filePath: string,
 
     const hasMultipleProperties = clz.properties?.some(prop => prop.upper !== undefined && prop.upper > 1) || clz.operations?.some(op => op.upper !== undefined && op.upper > 1);
 
+    const root = findRoot(clz);
+
+    const assocs = collectAllAssociations(root, clz);
+
+    //${(prop as Property).vis ?? ''}
+
+    // TODO: what about reflexive associations?
+    // ${assocs.map(assoc => `${assoc.properties?.filter(prop => (prop as Property).type.ref !== clz).map(prop => `private ${(prop as Property).static ? ' static' : ''} ${printType(prop)} ${prop.name}${prop.upper !== undefined && prop.upper > 1 ? ' = new ArrayList<'+prop.type?.ref?.name+ '>()' :''};`).join('\n')}`).join('\n')}            
+
+    const assocProps = assocs.map(assoc => 
+        assoc.properties?.filter(prop => (prop as Property).type.ref !== clz) ?? []
+    ).flat();
+
     const fileNode = expandToNode`
         package ${getQualifiedName(clz.$container, '.')};
         ${hasMultipleProperties ? `import java.util.List;\nimport java.util.ArrayList;` : ''}
 
         public ${clz.abstract ? 'abstract ':''}class ${clz.name} ${printExtendsAndImplements(clz)} {
             // generated properties
-            ${clz.properties?.map(prop => `${(prop as Property).vis ?? ''}${(prop as Property).static ? ' static' : ''} ${printType(prop)} ${prop.name}${prop.upper !== undefined && prop.upper > 1 ? ' = new ArrayList<'+prop.type?.ref?.name+ '>()' :''};`).join('\n')}
+            ${clz.properties?.map(prop => `private ${(prop as Property).static ? ' static' : ''} ${printType(prop)} ${prop.name}${prop.upper !== undefined && prop.upper > 1 ? ' = new ArrayList<'+prop.type?.ref?.name+ '>()' :''};`).join('\n')}
             // end of generated properties
+
+            // generated associations
+            ${assocProps.map(prop => `private ${(prop as Property).static ? ' static' : ''} ${printType(prop)} ${prop.name}${prop.upper !== undefined && prop.upper > 1 ? ' = new ArrayList<'+prop.type?.ref?.name+ '>()' :''};`).join('\n')}
+            // end of generated associations
 
             // generated getters and setters
             ${clz.properties?.map(prop => `${genGetter(prop as Property)}\n${genSetter(prop as Property)}`).join('\n')}
             // end of generated getters and setters
+
+            // generated accessors for associations
+            ${assocProps.map(prop => `${genAssocGetter(prop as Property)}\n${genAssocSetter(prop as Property)}`).join('\n')}
+            // end of generated accessors for associations
 
             // generated operations
             ${clz.operations?.map(op => `${(op as Operation).vis ?? ''}${(op as Operation).static ? ' static' : ''}${(op as Operation).abstract ? ' abstract' : ''} ${op.type === undefined ? 'void' : printType(op)} ${op.name}(${(op as Operation).params.map(param => `${printType(param)} ${param.name}`).join(', ')})${(op as Operation).abstract ? ';' : ' {}'}`).join('\n')}
@@ -224,15 +280,52 @@ function printExtends(type: Interface): string {
 }
 
 function genGetter(p: Property): string {
-    const gen = `public${p.static ? ' static' : ''} ${printType(p)} get${p.name.charAt(0).toUpperCase() + p.name.slice(1)}() {
+    const gen = `${p.vis ?? 'public'}${p.static ? ' static' : ''} ${printType(p)} get${p.name.charAt(0).toUpperCase() + p.name.slice(1)}() {
         return this.${p.name};
     }`;
     return gen;
 }
 
 function genSetter(p: Property): string {
-    const gen = `public${p.static ? ' static' : ''} void set${p.name.charAt(0).toUpperCase() + p.name.slice(1)}(${printType(p)} ${p.name}) {
+    const gen = `${p.vis ?? 'public'}${p.static ? ' static' : ''} void set${p.name.charAt(0).toUpperCase() + p.name.slice(1)}(${printType(p)} ${p.name}) {
         this.${p.name} = ${p.name};
+    }`;
+    return gen;
+}
+
+function genAssocGetter(p : Property): string {
+    let gen = '';
+    if (p.upper == 1) {
+    gen = `${p.vis ?? 'public'} ${printType(p)} get${p.name.charAt(0).toUpperCase() + p.name.slice(1)}() {
+        return this.${p.name};
+    }`;
+    } else {
+    gen = `${p.vis ?? 'public'}  ${printType(p)} get${p.name.charAt(0).toUpperCase() + p.name.slice(1)}() {
+        return (${printType(p)}) Collections.unmodifiableList(this.${p.name});
+    }
+        
+    ${p.vis ?? 'public'} void addTo${p.name.charAt(0).toUpperCase() + p.name.slice(1)}(${printType(p)} newValue) {
+    }
+    
+    ${p.vis ?? 'public'} void removeFrom${p.name.charAt(0).toUpperCase() + p.name.slice(1)}(${printType(p)} oldValue) {
+    
+    }`;
+    }
+    return gen;
+}
+
+function genAssocSetter(p: Property): string {
+    const gen = `${p.vis ?? 'public'} void set${p.name.charAt(0).toUpperCase() + p.name.slice(1)}(${printType(p)} newValue) {
+        if (this.${p.name} != newValue) {
+            ${p.type.ref?.name} oldValue = ${p.name};
+            if (oldValue != null) {
+                this.${p.name} = null;			
+                ${getOppositeCardinality(p) == -1 ? removeOldValue(p) : unsetOldValue(p)}
+            }
+            this.${p.name} = newValue;
+            if (newValue != null)			
+                ${getOppositeCardinality(p) !== 1 ? addNewValue(p) : setNewValue(p)}
+        }
     }`;
     return gen;
 }
@@ -258,5 +351,61 @@ function generateJavaRecord(type: DataType, name: string, filePath: string, dest
     }
     fs.writeFileSync(generatedFilePath, toString(fileNode));
     return generatedFilePath;
+}
+
+/*
+function getOppositeType(prop: Property): Type | undefined {
+    if (prop.$container.$type !== 'Association') {
+        return undefined;
+    }
+    return (prop.$container.properties?.filter(p => p !== prop).findLast as unknown as Property).type?.ref;
+}
+*/
+
+function getOppositeCardinality(prop: Property): number {
+    if (prop.$container.$type !== 'Association') {
+        return 0;
+    }
+    return (prop.$container.properties?.filter(p => p !== prop).findLast as unknown as Property).upper ?? 0;
+}
+
+function getOppositeProperty(prop: Property): Property | undefined {
+    if (prop.$container.$type !== 'Association') {
+        return undefined;
+    }
+    return (prop.$container.properties?.filter(p => p !== prop).findLast as unknown as Property);
+}
+
+function removeOldValue(prop: Property): string {
+    const genString = 'oldValue.removeFrom' + 
+        getOppositeProperty(prop)?.name.charAt(0).toUpperCase() + 
+        getOppositeProperty(prop)?.name.slice(1) + 
+        '(this);';
+
+    return genString;
+}
+
+function unsetOldValue(prop: Property): string {
+    const genString = 'oldValue.set' +
+        getOppositeProperty(prop)?.name.charAt(0).toUpperCase() + 
+        getOppositeProperty(prop)?.name.slice(1) + '(null);'
+
+    return genString;
+}
+
+function addNewValue(prop: Property): string {
+    const genString = 'newValue.addTo' +
+        getOppositeProperty(prop)?.name.charAt(0).toUpperCase() + 
+        getOppositeProperty(prop)?.name.slice(1) + 
+        '(this);';
+    return genString;
+}
+
+function setNewValue(prop: Property): string {
+    const genString = 'newValue.set' +
+        getOppositeProperty(prop)?.name.charAt(0).toUpperCase() + 
+        getOppositeProperty(prop)?.name.slice(1) + '(this);';
+
+    return genString;
 }
 
