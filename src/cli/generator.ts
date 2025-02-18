@@ -366,14 +366,16 @@ function getOppositeCardinality(prop: Property): number {
     if (prop.$container.$type !== 'Association') {
         return 0;
     }
-    return (prop.$container.properties?.filter(p => p !== prop).findLast as unknown as Property).upper ?? 0;
+    /*return (prop.$container.properties?.filter(p => p !== prop).findLast as unknown as Property).upper ?? 0;*/
+    return (prop.$container.properties?.filter(p => p !== prop)[0] as Property).upper ?? 0;
 }
 
 function getOppositeProperty(prop: Property): Property | undefined {
     if (prop.$container.$type !== 'Association') {
         return undefined;
     }
-    return (prop.$container.properties?.filter(p => p !== prop).findLast as unknown as Property);
+    //return (prop.$container.properties?.filter(p => p !== prop).findLast as unknown as Property);
+    return prop.$container.properties?.filter(p => p !== prop)[0] as Property;
 }
 
 function removeOldValue(prop: Property): string {
