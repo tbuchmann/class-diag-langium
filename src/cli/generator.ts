@@ -163,11 +163,10 @@ export function generateJavaClass(clz: Class, pkgName: string, filePath: string,
     const data = extractDestinationAndName(filePath, destination + "/" + getQualifiedName(clz.$container, '/'));
     const generatedFilePath = `${path.join(data.destination, clz.name)}.java`;
 
-    const hasMultipleProperties = clz.properties?.some(prop => prop.upper !== undefined && prop.upper > 1) || clz.operations?.some(op => op.upper !== undefined && op.upper > 1);
-
-    const root = findRoot(clz);
-
+    const root = findRoot(clz);   
     const assocs = collectAllAssociations(root, clz);
+
+    const hasMultipleProperties = clz.properties?.some(prop => prop.upper !== undefined && prop.upper > 1) || clz.operations?.some(op => op.upper !== undefined && op.upper > 1) || assocs.some(assoc => assoc.properties?.some(prop => prop.upper !== undefined && (prop.upper > 1 || prop.upper === -1)));     
 
     //${(prop as Property).vis ?? ''}
 
@@ -180,15 +179,15 @@ export function generateJavaClass(clz: Class, pkgName: string, filePath: string,
 
     const fileNode = expandToNode`
         package ${getQualifiedName(clz.$container, '.')};
-        ${hasMultipleProperties ? `import java.util.List;\nimport java.util.ArrayList;` : ''}
+        ${hasMultipleProperties ? `import java.util.List;\nimport java.util.ArrayList;\nimport java.util.Collections;` : ''}
 
         public ${clz.abstract ? 'abstract ':''}class ${clz.name} ${printExtendsAndImplements(clz)} {
             // generated properties
-            ${clz.properties?.map(prop => `private ${(prop as Property).static ? ' static' : ''} ${printType(prop)} ${prop.name}${prop.upper !== undefined && prop.upper > 1 ? ' = new ArrayList<'+prop.type?.ref?.name+ '>()' :''};`).join('\n')}
+            ${clz.properties?.map(prop => `private ${(prop as Property).static ? ' static' : ''} ${printType(prop)} ${prop.name}${prop.upper !== undefined && (prop.upper > 1 || prop.upper === -1) ? ' = new ArrayList<'+prop.type?.ref?.name+ '>()' :''};`).join('\n')}
             // end of generated properties
 
             // generated associations
-            ${assocProps.map(prop => `private ${(prop as Property).static ? ' static' : ''} ${printType(prop)} ${prop.name}${prop.upper !== undefined && prop.upper > 1 ? ' = new ArrayList<'+prop.type?.ref?.name+ '>()' :''};`).join('\n')}
+            ${assocProps.map(prop => `private ${(prop as Property).static ? ' static' : ''} ${printType(prop)} ${prop.name}${prop.upper !== undefined && (prop.upper > 1 || prop.upper === -1) ? ' = new ArrayList<'+prop.type?.ref?.name+ '>()' :''};`).join('\n')}
             // end of generated associations
 
             // generated getters and setters
@@ -302,20 +301,16 @@ function genAssocGetter(p : Property): string {
     } else {
     gen = `${p.vis ?? 'public'}  ${printType(p)} get${p.name.charAt(0).toUpperCase() + p.name.slice(1)}() {
         return (${printType(p)}) Collections.unmodifiableList(this.${p.name});
-    }
-        
-    ${p.vis ?? 'public'} void addTo${p.name.charAt(0).toUpperCase() + p.name.slice(1)}(${printType(p)} newValue) {
-    }
-    
-    ${p.vis ?? 'public'} void removeFrom${p.name.charAt(0).toUpperCase() + p.name.slice(1)}(${printType(p)} oldValue) {
-    
     }`;
+            
     }
     return gen;
 }
 
 function genAssocSetter(p: Property): string {
-    const gen = `${p.vis ?? 'public'} void set${p.name.charAt(0).toUpperCase() + p.name.slice(1)}(${printType(p)} newValue) {
+    let gen = '';
+    if (p.upper == 1) {
+    gen = `${p.vis ?? 'public'} void set${p.name.charAt(0).toUpperCase() + p.name.slice(1)}(${printType(p)} newValue) {
         if (this.${p.name} != newValue) {
             ${p.type.ref?.name} oldValue = ${p.name};
             if (oldValue != null) {
@@ -327,10 +322,20 @@ function genAssocSetter(p: Property): string {
                 ${getOppositeCardinality(p) !== 1 ? addNewValue(p) : setNewValue(p)}
         }
     }`;
+    }
+    else {
+    gen = `${p.vis ?? 'public'} void addTo${p.name.charAt(0).toUpperCase() + p.name.slice(1)}(${p.type.ref?.name} newValue) {
+    }
+    
+    ${p.vis ?? 'public'} void removeFrom${p.name.charAt(0).toUpperCase() + p.name.slice(1)}(${p.type.ref?.name} oldValue) {
+    
+    }`;
+    }
     return gen;
 }
 
-function printType(t: TypedElement): string {
+function printType(t: TypedElement | undefined): string {
+    if (t === undefined) return '';
     const gen = `${t.upper !== undefined && t.upper !== 1 ? 'List<' + t.type?.ref?.name + '>': t.type?.ref?.name}`;
 
     return gen;
