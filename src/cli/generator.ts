@@ -206,7 +206,7 @@ export function generateJavaClass(clz: Class, pkgName: string, filePath: string,
             // end of generated accessors for associations
 
             // generated operations
-            ${clz.operations?.map(op => `${(op as Operation).vis ?? ''}${(op as Operation).static ? ' static' : ''}${(op as Operation).abstract ? ' abstract' : ''} ${op.type === undefined ? 'void' : printType(op)} ${op.name}(${(op as Operation).params.map(param => `${printType(param)} ${param.name}`).join(', ')})${(op as Operation).abstract ? ';' : ' {}'}`).join('\n')}
+            ${clz.operations?.map(op => `${printJavaDoc(op as Operation)}\n${(op as Operation).vis ?? ''}${(op as Operation).static ? ' static' : ''}${(op as Operation).abstract ? ' abstract' : ''} ${op.type === undefined ? 'void' : printType(op)} ${op.name}(${(op as Operation).params.map(param => `${printType(param)} ${param.name}`).join(', ')})${(op as Operation).abstract ? ';' : ' {}'}`).join('\n')}
         }
     `.appendNewLineIfNotEmpty();
 
@@ -308,8 +308,11 @@ function genAssocGetter(p : Property): string {
     } else {
     gen = `${p.vis ?? 'public'}  ${printType(p)} get${p.name.charAt(0).toUpperCase() + p.name.slice(1)}() {
         return (${printType(p)}) Collections.unmodifiableList(this.${p.name});
-    }`;
-            
+    }
+        
+    ${p.vis ?? 'public'} int sizeOf${p.name.charAt(0).toUpperCase() + p.name.slice(1)}() {
+        return this.${p.name}.size();
+    }`;            
     }
     return gen;
 }
@@ -332,10 +335,19 @@ function genAssocSetter(p: Property): string {
     }
     else {
     gen = `${p.vis ?? 'public'} void addTo${p.name.charAt(0).toUpperCase() + p.name.slice(1)}(${p.type.ref?.name} newValue) {
+        if (newValue != null && !this.${p.name}.contains(newValue)) {
+		this.${p.name}.add(newValue);		
+		${getOppositeCardinality(p) === 1 ? `newValue.set${getOppositeProperty(p)?.name.charAt(0).toUpperCase() + getOppositeProperty(p)?.name.slice(1)}(this);`
+             : `newValue.addTo${getOppositeProperty(p)?.name.charAt(0).toUpperCase() + getOppositeProperty(p)?.name.slice(1)}(this);`}
+	    }
     }
     
     ${p.vis ?? 'public'} void removeFrom${p.name.charAt(0).toUpperCase() + p.name.slice(1)}(${p.type.ref?.name} oldValue) {
-    
+        if (oldValue != null && this.${p.name}.contains(oldValue)) {
+		this.${p.name}.remove(oldValue);				
+        ${getOppositeCardinality(p) === 1 ? `oldValue.set${getOppositeProperty(p)?.name.charAt(0).toUpperCase() + getOppositeProperty(p)?.name.slice(1)}(null);`
+             : `oldValue.removeFrom${getOppositeProperty(p)?.name.charAt(0).toUpperCase() + getOppositeProperty(p)?.name.slice(1)}(this);`}
+	    }
     }`;
     }
     return gen;
@@ -388,9 +400,9 @@ function getOppositeCardinality(prop: Property): number {
     return (prop.$container.properties?.filter(p => p !== prop)[0] as Property).upper ?? 0;
 }
 
-function getOppositeProperty(prop: Property): Property | undefined {
+function getOppositeProperty(prop: Property): Property {
     if (prop.$container.$type !== 'Association') {
-        return undefined;
+        return prop;
     }
     //return (prop.$container.properties?.filter(p => p !== prop).findLast as unknown as Property);
     return prop.$container.properties?.filter(p => p !== prop)[0] as Property;
@@ -426,6 +438,13 @@ function setNewValue(prop: Property): string {
         getOppositeProperty(prop)?.name.charAt(0).toUpperCase() + 
         getOppositeProperty(prop)?.name.slice(1) + '(this);';
 
+    return genString;
+}
+
+function printJavaDoc(op : Operation) : string {
+    const genString = `/**
+    * ${op.description?.replace(/\n/g, '\n* ')}
+    */`;
     return genString;
 }
 
