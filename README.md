@@ -18,3 +18,8 @@
 
 - Run the generator afterwards
 	``npm run langium:generate``
+
+- Build the extension
+	``npm run build``
+
+- Test the extension in a new VSCode instance by pressing <kbd>F5</kbd>
