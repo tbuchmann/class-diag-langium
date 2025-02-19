@@ -4,6 +4,13 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { extractDestinationAndName } from './cli-util.js';
 
+
+const typeMap = new Map<string, string>();
+    typeMap.set('Decimal', 'Double');
+    typeMap.set('String', 'String');
+    typeMap.set('Boolean', 'Boolean');
+    typeMap.set('Integer', 'Integer');
+
 export function generateCode(model: Model, filePath: string, destination: string | undefined): string {
    const allTypes = collectAllTypes(model);
    allTypes.forEach(type => {
@@ -144,7 +151,7 @@ export function generateClassDiagram(pkg: Package, filePath: string, destination
         ${Array.from(classSet).map(clz => genSuperClasses(clz)).join('\n')}
         ${Array.from(classSet).map(clz => genImplementingInterfaces(clz)).join('\n')}
         ${Array.from(interfaceSet).map(inf => genSuperInterfaces(inf)).join('\n')}
-        ${Array.from(assocSet).map(assoc => `${assoc.properties?.[0].type?.ref?.name} "${assoc.properties?.[0].upper ?? 1}" ${assocTypeMap.get((assoc.properties?.[0] as Property).kind ?? 'none')} "${assoc.properties?.[1].upper ?? 1}" ${assoc.properties?.[1].type?.ref?.name} : ${assoc.name} >`).join('\n')}
+        ${Array.from(assocSet).map(assoc => `${assoc.properties?.[0].type?.ref?.name} "${assoc.properties?.[0].upper ?? 1}" ${assocTypeMap.get((assoc.properties?.[1] as Property).kind ?? 'none')} "${assoc.properties?.[1].upper ?? 1}" ${assoc.properties?.[1].type?.ref?.name} : ${assoc.name} >`).join('\n')}
         ${(dtSet.size > 0) ? `hide <<DataType>> circle` : ''}
         ${(ptSet.size > 0) ? `hide <<PrimitiveType>> circle` : ''}
         ${(ptSet.size > 0) ? `hide <<PrimitiveType>> members` : ''}
@@ -166,7 +173,7 @@ export function generateJavaClass(clz: Class, pkgName: string, filePath: string,
     const root = findRoot(clz);   
     const assocs = collectAllAssociations(root, clz);
 
-    const hasMultipleProperties = clz.properties?.some(prop => prop.upper !== undefined && prop.upper > 1) || clz.operations?.some(op => op.upper !== undefined && op.upper > 1) || assocs.some(assoc => assoc.properties?.some(prop => prop.upper !== undefined && (prop.upper > 1 || prop.upper === -1)));     
+    const hasMultipleProperties = clz.properties?.some(prop => prop.upper !== undefined && prop.upper > 1) || clz.operations?.some(op => op.upper !== undefined && op.upper > 1) || assocs.some(assoc => assoc.properties?.some(prop => prop.upper !== undefined && (prop.upper > 1 || prop.upper === -1)));         
 
     //${(prop as Property).vis ?? ''}
 
@@ -336,7 +343,13 @@ function genAssocSetter(p: Property): string {
 
 function printType(t: TypedElement | undefined): string {
     if (t === undefined) return '';
-    const gen = `${t.upper !== undefined && t.upper !== 1 ? 'List<' + t.type?.ref?.name + '>': t.type?.ref?.name}`;
+    let typeName = '';
+    if (t.type?.ref?.$type === 'PrimitiveType') {
+        typeName = typeMap.get(t.type?.ref?.name) ?? '';
+    } else {
+        typeName = t.type?.ref?.name ?? '';
+    }
+    const gen = `${t.upper !== undefined && t.upper !== 1 ? 'List<' + typeName + '>': typeName}`;
 
     return gen;
 }

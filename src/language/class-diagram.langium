@@ -14,12 +14,20 @@ Package:
 type TypedElement =
     Property | Operation | Parameter;
 
+/*
+interface TypedElement {
+    name: string;
+    type: Type;
+    lower: number=0;
+    upper: number=1;
+}
+*/
 Property returns TypedElement:
     {infer Property} (vis=VisibilityKind)? (static?='static')? name=ID ':' type=[Type:ID] ('[' lower=INT '..' upper=INT ']')? (kind=AggregationKind)? (navigable?='+')?
     ;
 
 Operation returns TypedElement:
-    {infer Operation} (vis=VisibilityKind)? (static?='static')? (abstract?='abstract')? name=ID '(' params+=Parameter* ')' (':' type=[Type:ID] ('[' lower=INT '..' upper=INT ']')?)?
+    {infer Operation} (vis=VisibilityKind)? (static?='static')? (abstract?='abstract')? name=ID '(' (params+=Parameter (',' params+=Parameter)*)? ')' (':' type=[Type:ID] ('[' lower=INT '..' upper=INT ']')?)?
     ;
 
 Parameter returns TypedElement:
