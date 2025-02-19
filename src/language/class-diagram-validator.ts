@@ -45,6 +45,10 @@ export class ClassDiagramValidator {
 
     checkOperationStartsWithLower(o: Operation, accept: ValidationAcceptor): void {
         if (o.name) {
+            // Only exception: Constructors
+            if (o.name === o.$container?.name) {
+                return;
+            }
             const firstChar = o.name.substring(0, 1);
             if (firstChar.toLowerCase() != firstChar) {
                 accept('warning', 'Operation name should start with lowercase.', { node: o, property: 'name'});
