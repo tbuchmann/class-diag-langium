@@ -206,7 +206,7 @@ export function generateJavaClass(clz: Class, pkgName: string, filePath: string,
             // end of generated accessors for associations
 
             // generated operations
-            ${clz.operations?.map(op => `${printJavaDoc(op as Operation)}\n${(op as Operation).vis ?? ''}${(op as Operation).static ? ' static' : ''}${(op as Operation).abstract ? ' abstract' : ''} ${op.type === undefined ? 'void' : printType(op)} ${op.name}(${(op as Operation).params.map(param => `${printType(param)} ${param.name}`).join(', ')})${(op as Operation).abstract ? ';' : ' {}'}`).join('\n')}
+            ${clz.operations?.map(op => `${printJavaDoc(op as Operation)}\n${(op as Operation).vis ?? ''}${(op as Operation).static ? ' static' : ''}${(op as Operation).abstract ? ' abstract' : ''} ${op.type === undefined ? 'void' : printType(op)} ${op.name}(${(op as Operation).params.map(param => `${printType(param)} ${param.name}`).join(', ')})${(op as Operation).abstract ? ';' : printBody(op as Operation)}`).join('\n')}
         }
     `.appendNewLineIfNotEmpty();
 
@@ -448,3 +448,18 @@ function printJavaDoc(op : Operation) : string {
     return genString;
 }
 
+function printBody(op : Operation): string {
+    const genString = ` {
+        // insert your code here
+        ${op.implementation !== undefined ? op.implementation?.replace(/\n/g, '\n') : ''}    
+    }`;
+
+    return genString;
+}
+/*
+function printImplementation(op : Operation): string {
+    const genString = `${op.implementation?.replace(/\n/g, '\n')}`;
+
+    return genString;
+}
+*/
