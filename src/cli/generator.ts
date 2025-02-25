@@ -442,8 +442,11 @@ function setNewValue(prop: Property): string {
 }
 
 function printJavaDoc(op : Operation) : string {
+    if (op.description === undefined) {
+        return '';
+    }
     const genString = `/**
-    * ${op.description?.replace(/\n/g, '\n* ')}
+    * @prompt ${op.description?.replace(/\n/g, '\n* ')}
     */`;
     return genString;
 }
