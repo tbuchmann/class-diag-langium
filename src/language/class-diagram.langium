@@ -49,12 +49,12 @@ Interface returns Type:
     '}';
 
 DataType returns Type:
-    {infer DataType} (vis=VisibilityKind)? 'dt' name=ID '{'
+    {infer DataType} (vis=VisibilityKind)? 'datatype' name=ID '{'
         properties+=Property*
     '}';
 
 PrimitiveType returns Type:
-    {infer PrimitiveType} 'pt' name=ID;
+    {infer PrimitiveType} 'primitive' name=ID;
 
 Enumeration returns Type:
     {infer Enumeration} 'enum' name=ID '{'
