@@ -26,7 +26,7 @@ describe('Linking tests', () => {
     test('linking of unknown type', async () => {
         document = await parse(`
             package de {
-                dt Integer {}
+                datatype Integer {}
                 class Test {
                     name : String
                 }

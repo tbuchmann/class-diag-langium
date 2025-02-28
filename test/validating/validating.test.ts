@@ -24,8 +24,8 @@ describe('Validating', () => {
     test('check no errors', async () => {
         document = await parse(`
             package de {
-                pt Integer
-                pt String
+                primitive Integer
+                primitive String
                 class Test {
                     public a : Integer
                     private b : String
@@ -34,7 +34,7 @@ describe('Validating', () => {
                 }
                 interface ITest {}
                 enum ETest {A, B, C}
-                dt DTest {}
+                datatype DTest {}
             }
         `);        
 
@@ -67,7 +67,7 @@ describe('Validating', () => {
     test('check lower case property name', async () => {
         document = await parse(`
             package de {
-                pt Integer
+                primitive Integer
                 class Test {                    
                     public A : Integer
                 }
@@ -86,7 +86,7 @@ describe('Validating', () => {
     test('check lower case operation name', async () => {
         document = await parse(`
             package de {
-                pt Integer
+                primitive Integer
                 class Test {
                     public DoSmth(test : Integer) : Integer
                 }
@@ -123,7 +123,7 @@ describe('Validating', () => {
     test('check duplicate property name', async () => {
         document = await parse(`
             package de {
-                pt Integer
+                primitive Integer
                 class Test {
                     public a : Integer
                     public a : Integer
@@ -144,7 +144,7 @@ describe('Validating', () => {
     test('check duplicate operation name', async () => {
         document = await parse(`
             package de {
-                pt Integer
+                primitive Integer
                 class Test {
                     public a() : Integer
                     public a() : Integer

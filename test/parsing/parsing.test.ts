@@ -108,8 +108,8 @@ describe('Parsing tests', () => {
                         class Test {}
                         interface ITest {}
                         enum TestEnum { A, B }
-                        dt TestDT {}
-                        pt TestPT
+                        datatype TestDT {}
+                        primitive TestPT
                     }
                 }
             }
@@ -148,8 +148,8 @@ describe('Parsing tests', () => {
     test('parse class with properties and operations', async () => {
         document = await parse(`
             package de {
-                pt Integer
-                pt String
+                primitive Integer
+                primitive String
                 class Test {
                     public a : Integer
                     private b : String
