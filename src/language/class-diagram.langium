@@ -23,7 +23,7 @@ interface TypedElement {
 }
 */
 Property returns TypedElement:
-    {infer Property} (vis=VisibilityKind)? (static?='static')? name=ID ':' type=[Type:ID] ('[' lower=INT '..' upper=INT ']')? (kind=AggregationKind)? (navigable?='+')?
+    {infer Property} (vis=VisibilityKind)? (static?='static')? (derived?='/')? name=ID ':' type=[Type:ID] ('[' lower=INT '..' upper=INT ']')? (kind=AggregationKind)? (notnavigable?='x')?
     ;
 
 Operation returns TypedElement:
