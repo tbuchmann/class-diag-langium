@@ -19,5 +19,23 @@ beforeAll(async () => {
 });
 
 describe('Java generation tests', () => {
-    
+    test('Empty model', async () => {
+        document = await parse('');
+        expect(document).toBeDefined();
+        // if (isModel(document)) {
+        //     expect(s(document)).toBe('');
+        // }
+    });
+
+    test('Simple model', async () => {
+        document = await parse(`
+            package test {
+                class A {}
+                class B {}
+            }
+        `);
+        // expect(document).toBeDefined();
+        // if (isModel(document)) {
+        //     expect(s(document)).toBe(`
+    });
 });

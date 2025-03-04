@@ -15,9 +15,27 @@ beforeAll(async () => {
     parse = parseHelper<Model>(services.ClassDiagram);
 
     // activate the following if your linking test requires elements from a built-in library, for example
-    // await services.shared.workspace.WorkspaceManager.initializeWorkspace([]);
+    await services.shared.workspace.WorkspaceManager.initializeWorkspace([]);
 });
 
 describe('PlantUML generation tests', () => {
-    
+    test('Empty model', async () => {
+        document = await parse('');
+        expect(document).toBeDefined();
+        // if (isModel(document)) {
+        //     expect(s(document)).toBe('');
+        // }
+    });
+
+    test('Simple model', async () => {
+        document = await parse(`
+            package test {
+                class A {}
+                class B {}
+            }
+        `);
+        // expect(document).toBeDefined();
+        // if (isModel(document)) {
+        //     expect(s(document)).toBe(`
+    });
 });
