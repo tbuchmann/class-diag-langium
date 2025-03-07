@@ -34,8 +34,18 @@ describe('PlantUML generation tests', () => {
                 class B {}
             }
         `);
-        // expect(document).toBeDefined();
-        // if (isModel(document)) {
-        //     expect(s(document)).toBe(`
+        expect(document).toBeDefined();
+        // if (isModel(document.parseResult.value)) {
+        //     const result = s(document.parseResult.value);
+        //     expect(result).toBe(`@startuml
+        //         package test {
+        //         class A {
+        //         }
+        //         class B {
+        //         }
+        //         }
+        //         @enduml`);
+        // }
+        
     });
 });

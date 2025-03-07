@@ -453,6 +453,8 @@ function printJavaDoc(op : Operation) : string {
 
 function printBody(op : Operation): string {
     const genString = ` {
+        //generated start
+        //generated end
         // insert your code here
         ${op.implementation !== undefined ? op.implementation?.replace(/\n/g, '\n') : ''}    
     }`;
