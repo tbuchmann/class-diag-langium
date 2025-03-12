@@ -1,12 +1,7 @@
 {
     "name": "class-diag",
-    "description": "Please enter a brief description here",
-    "version": "0.0.1",
-    "files": [
-        "bin",
-        "out",
-        "src"
-    ],
+    "description": "An editor providing a textual concrete syntax for class diagrams.",
+    "version": "0.0.1",    
     "type": "module",
     "scripts": {
         "build": "tsc -b tsconfig.src.json && node esbuild.mjs",
