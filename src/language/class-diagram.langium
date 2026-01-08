@@ -69,7 +69,7 @@ Association returns Type:
     '}';
 
 ImplContent:
-    body=( ID )+
+    body+=( ID )+
     ;
 /*
 MemberEnd:
