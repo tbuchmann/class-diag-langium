@@ -1,7 +1,9 @@
 grammar ClassDiagram
 
 type Type =
-    Class | Interface | DataType | PrimitiveType | Enumeration | Association;
+    Classifier | DataType | PrimitiveType | Enumeration | Association;
+
+type Classifier = Class | Interface;
 
 entry Model:
     packages+=Package*;
@@ -27,22 +29,22 @@ Property returns TypedElement:
     ;
 
 Operation returns TypedElement:
-    {infer Operation} (vis=VisibilityKind)? (static?='static')? (abstract?='abstract')? name=ID '(' (params+=Parameter (',' params+=Parameter)*)? ')' (':' type=[Type:ID] ('[' lower=INT '..' upper=INT ']')?)?
-    ('desc' description=STRING)?
-    ('impl' implementation=STRING)?
-    ;
+    {infer Operation} (vis=VisibilityKind)? (static?='static')? (abstract?='abstract')? name=ID '(' (params+=Parameter (',' params+=Parameter)*)? ')' (':' type=[Type:ID] ('[' lower=INT '..' upper=INT ']')?)? '{'
+    ('spec' description=STRING)?
+    ('impl' target=ID '<<' content=ImplContent '>>')?
+    '}';
 
 Parameter returns TypedElement:
     {infer Parameter} name=ID ':' type=[Type:ID] ('[' lower=INT '..' upper=INT ']')?;
 
-Class returns Type:
+Class returns Classifier:
     {infer Class} (vis=VisibilityKind)? (abstract?='abstract')? 'class' name=ID 
     ('extends' superClasses+=[Class:ID] (',' superClasses+=[Class:ID])*)? 
     ('implements' superInterfaces+=[Interface:ID] (',' superInterfaces+=[Interface:ID])*)? '{'
         (properties+=Property | operations+=Operation)*
     '}';
 
-Interface returns Type:
+Interface returns Classifier:
     {infer Interface} (vis=VisibilityKind)? 'interface' name=ID 
     ('extends' superInterfaces+=[Interface:ID] (',' superInterfaces+=[Interface:ID])*)? '{'
         (properties+=Property | operations+=Operation)*
@@ -65,6 +67,10 @@ Association returns Type:
     {infer Association} 'assoc' name=ID '{'
         properties+=Property*
     '}';
+
+ImplContent:
+    body=( ID )+
+    ;
 /*
 MemberEnd:
     prop=Property (kind=AggregationKind)? (navigable?='+') ;

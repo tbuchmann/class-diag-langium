@@ -1,5 +1,5 @@
 import type { ValidationAcceptor, ValidationChecks, Reference } from 'langium';
-import type { ClassDiagramAstType, Class, Interface, Type, Property, Operation, Enumeration, Package } from './generated/ast.js';
+import type { ClassDiagramAstType, Classifier, Class, Interface, Type, Property, Operation, Enumeration, Package } from './generated/ast.js';
 import type { ClassDiagramServices } from './class-diagram-module.js';
 
 /**
@@ -46,7 +46,7 @@ export class ClassDiagramValidator {
     checkOperationStartsWithLower(o: Operation, accept: ValidationAcceptor): void {
         if (o.name) {
             // Only exception: Constructors
-            if (o.name === o.$container?.name) {
+            if (o.name === (o.$container as Classifier)?.name) {
                 return;
             }
             const firstChar = o.name.substring(0, 1);
@@ -136,13 +136,13 @@ export class ClassDiagramValidator {
     }
 
     checkDuplicateOperationName(o: Operation, accept: ValidationAcceptor): void {        
-        if ('operations' in o.$container) {
-            o.$container?.operations.forEach(operation => {
+        //if ('operations' in o.$container) {
+            (o.$container as Classifier)?.operations.forEach(operation => {
                 if (operation !== o && operation.name === o.name) {
                     accept('error', `Duplicate operation name '${o.name}'.`, { node: o, property: 'name' });
                 }
             });
-        }
+        //}
     }
     
     checkDuplicateEnumerationLiteralName(e: Enumeration, accept: ValidationAcceptor): void {        

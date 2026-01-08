@@ -456,7 +456,7 @@ function printBody(op : Operation): string {
         //generated start
         //generated end
         // insert your code here
-        ${op.implementation !== undefined ? op.implementation?.replace(/\n/g, '\n') : ''}    
+        ${op.content !== undefined ? op.content?.body?.replace(/\n/g, '\n') : ''}    
     }`;
 
     return genString;
