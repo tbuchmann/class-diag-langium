@@ -77,7 +77,7 @@
             {
                 "language": "class-diagram",
                 "scopeName": "source.class-diagram",
-                "path": "syntaxes/class-diagram.tmLanguage.json"
+                "path": "syntaxes/myclass-diagram.tmLanguage.json"
             }
         ],
         "commands": [
