@@ -1,0 +1,50 @@
+{
+  "name": "class-diagram",
+  "scopeName": "source.class-diagram",
+  "fileTypes": [".cdiag"],
+  "patterns": [
+    { "include": "#comments" },
+    { "include": "#impl-block" },
+    { "include": "#keywords" },
+    { "include": "#strings" }
+  ],
+  "repository": {
+    "keywords": {
+      "name": "keyword.control.class-diagram",
+      "match": "\\b(abstract|assoc|class|composite|datatype|enum|extends|impl|implements|interface|none|package|primitive|private|protected|public|shared|spec|static|x)\\b"
+    },
+    "impl-block": {
+      "begin": "\\b(impl)\\s+([a-zA-Z]+)\\s+<<",
+      "beginCaptures": {
+        "1": { "name": "keyword.control.class-diagram" },
+        "2": { "name": "entity.name.type.class-diagram" }
+      },
+      "end": ">>",
+      "patterns": [
+        { "include": "source.java" },
+        { "include": "source.python" }
+      ]
+    },
+    "comments": {
+      "patterns": [
+        {
+          "name": "comment.block.class-diagram",
+          "begin": "/\\*",
+          "end": "\\*/"
+        },
+        {
+          "name": "comment.line.class-diagram",
+          "match": "//.*"
+        }
+      ]
+    },
+    "strings": {
+      "name": "string.quoted.double.class-diagram",
+      "begin": "\"",
+      "end": "\"",
+      "patterns": [
+        { "match": "\\\\.", "name": "constant.character.escape.class-diagram" }
+      ]
+    }
+  }
+}
