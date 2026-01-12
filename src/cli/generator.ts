@@ -206,7 +206,7 @@ export function generateJavaClass(clz: Class, pkgName: string, filePath: string,
             // end of generated accessors for associations
 
             // generated operations
-            ${clz.operations?.map(op => `${printJavaDoc(op as Operation)}\n${(op as Operation).vis ?? ''}${(op as Operation).static ? ' static' : ''}${(op as Operation).abstract ? ' abstract' : ''} ${op.type === undefined ? 'void' : printType(op)} ${op.name}(${(op as Operation).params.map(param => `${printType(param)} ${param.name}`).join(', ')})${(op as Operation).abstract ? ';' : printBody(op as Operation)}`).join('\n')}
+            ${clz.operations?.map(op => genOperation(op as Operation, clz.name)).join('\n')}
         }
     `.appendNewLineIfNotEmpty();
 
@@ -441,12 +441,27 @@ function setNewValue(prop: Property): string {
     return genString;
 }
 
+function genOperation(op: Operation, className: string): string {
+    const isConstructor = op.name === className;
+    const javaDoc = printJavaDoc(op);
+    const visibility = op.vis ?? '';
+    const staticModifier = op.static ? ' static' : '';
+    const abstractModifier = op.abstract ? ' abstract' : '';
+    const returnType = isConstructor ? '' : (op.type === undefined ? 'void' : printType(op));
+    const returnTypePrefix = returnType ? `${returnType} ` : '';
+    const signature = `${visibility}${staticModifier}${abstractModifier} ${returnTypePrefix}${op.name}(${op.params.map(param => `${printType(param)} ${param.name}`).join(', ')})`.trim();
+    const body = op.abstract ? ';' : printBody(op);
+    
+    return `${javaDoc}${javaDoc ? '\n' : ''}${signature}${body}`.trim();
+}
+
 function printJavaDoc(op : Operation) : string {
     if (op.description === undefined) {
         return '';
     }
     const genString = `/**
     * @prompt ${op.description?.replace(/\n/g, '\n* ')}
+    * ${op.content !== undefined ? ` @generated NOT` : ''}
     */`;
     return genString;
 }

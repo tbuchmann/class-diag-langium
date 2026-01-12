@@ -7,6 +7,8 @@ import { createClassDiagramServices } from '../language/class-diagram-module.js'
 import { extractAstNode } from '../cli/cli-util.js';
 import { NodeFileSystem } from 'langium/node';
 import { Model } from '../language/generated/ast.js';
+import { execSync } from 'node:child_process';
+import * as fs from 'node:fs';
 import chalk from 'chalk';
 
 let client: LanguageClient;
@@ -66,6 +68,33 @@ export const generateCodeAction = async (fileName: string, destination: string):
     const model = await extractAstNode<Model>(fileName, services);
     const generatedFilePath = generateCode(model, fileName, destination);
     console.log(chalk.green(`Code generated successfully: ${generatedFilePath}`));
+    // 2. Alle generierten Java-Dateien finden
+    try {
+        // Wir sagen TypeScript explizit, dass wir ein Array von Strings erwarten
+        // Das "as string[]" löst den TS2349 Fehler
+        const allFiles = fs.readdirSync(destination, { recursive: true }) as string[];
+
+        const javaFiles = allFiles
+            .filter((f: string) => f.endsWith('.java')) // Expliziter Typ (f: string) löst TS7006
+            .map((f: string) => path.join(destination, f));
+
+        if (javaFiles.length === 0) {
+            console.log(chalk.yellow("No Java files found to format."));
+            return;
+        }
+
+        console.log(chalk.blue(`Formatting ${javaFiles.length} Java files...`));
+
+        const fileList = javaFiles.map((f: string) => `"${f}"`).join(' ');
+
+        execSync(`npx -y google-java-format --replace ${fileList}`, {
+            stdio: 'inherit'
+        });
+
+        console.log(chalk.green(`Code generated and formatted successfully.`));
+    } catch (error) {
+        console.error(chalk.red('Formatting failed:'), error);
+    }
 };
 
 function startLanguageClient(context: vscode.ExtensionContext): LanguageClient {

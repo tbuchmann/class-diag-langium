@@ -6,6 +6,7 @@
     { "include": "#comments" },
     { "include": "#impl-block" },
     { "include": "#keywords" },
+    { "include": "#types" },
     { "include": "#strings" }
   ],
   "repository": {
@@ -23,6 +24,20 @@
       "patterns": [
         { "include": "source.java" },
         { "include": "source.python" }
+      ]
+    },
+    "types": {
+      "patterns": [
+          {
+              "match": "(?<=:)\\s*([a-zA-Z_][a-zA-Z0-9_]*)",
+              "captures": {
+                  "1": { "name": "entity.name.type.class-diagram" }
+              }
+          },
+          {
+              "match": "\\b(String|Integer|Boolean|Float|Decimal|void)\\b",
+              "name": "support.type.primitive.class-diagram"
+          }
       ]
     },
     "comments": {
