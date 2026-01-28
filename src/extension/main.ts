@@ -10,11 +10,43 @@ import { Model } from '../language/generated/ast.js';
 import { execSync } from 'node:child_process';
 import * as fs from 'node:fs';
 import chalk from 'chalk';
+import { DiagramProvider } from './diagram-provider.js';
 
 let client: LanguageClient;
+let diagramProvider: DiagramProvider;
 
 // This function is called when the extension is activated.
 export function activate(context: vscode.ExtensionContext): void {
+    diagramProvider = DiagramProvider.getInstance();
+
+    // Register the webview panel serializer
+    context.subscriptions.push(
+        vscode.window.registerWebviewPanelSerializer(DiagramProvider.viewType, diagramProvider)
+    );
+
+    // Command to open preview
+    const openPreviewCommand = vscode.commands.registerCommand('class-diagram.openPreview', async (uri: vscode.Uri | undefined) => {
+        const editor = vscode.window.activeTextEditor;
+        if (editor && editor.document.fileName.endsWith('.cdiag')) {
+            await diagramProvider.openPreview(editor);
+        } else {
+            vscode.window.showErrorMessage('Please open a .cdiag file first');
+        }
+    });
+
+    // On document change, update the preview if it exists
+    const onChangeDisposable = vscode.workspace.onDidChangeTextDocument((event) => {
+        if (event.document.fileName.endsWith('.cdiag')) {
+            if (diagramProvider.hasPanel(event.document.fileName)) {
+                diagramProvider.updateWebviewContent(
+                    (diagramProvider as any).panels.get(event.document.fileName),
+                    event.document
+                );
+            }
+        }
+    });
+
+    // On save, generate diagrams to file (existing functionality)
     let disposable = vscode.workspace.onDidSaveTextDocument((document) => {        
         if (document.fileName.endsWith('.cdiag')) {
             const filePath = document.fileName;
@@ -40,6 +72,8 @@ export function activate(context: vscode.ExtensionContext): void {
 
     context.subscriptions.push(disposable);
     context.subscriptions.push(disposable2);
+    context.subscriptions.push(openPreviewCommand);
+    context.subscriptions.push(onChangeDisposable);
     client = startLanguageClient(context);
 }
 

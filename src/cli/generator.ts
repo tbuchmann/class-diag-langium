@@ -93,10 +93,7 @@ function findRoot(type: Type) : Model {
     return model;
 }
 
-export function generateClassDiagram(pkg: Package, filePath: string, destination: string | undefined) : string {
-    const data = extractDestinationAndName(filePath, destination);
-    const generatedFilePath = `${path.join(data.destination, data.name + getQualifiedName(pkg, "."))}.classdiag`;
-
+export function generatePlantUmlString(pkg: Package): string {
     const visMap = new Map<string, string>();
     visMap.set('public', '+');
     visMap.set('protected', '#');
@@ -158,10 +155,19 @@ export function generateClassDiagram(pkg: Package, filePath: string, destination
         @enduml
     `.appendNewLineIfNotEmpty();
 
+    return toString(fileNode);
+}
+
+export function generateClassDiagram(pkg: Package, filePath: string, destination: string | undefined) : string {
+    const data = extractDestinationAndName(filePath, destination);
+    const generatedFilePath = `${path.join(data.destination, data.name + getQualifiedName(pkg, "."))}.classdiag`;
+
+    const plantUmlString = generatePlantUmlString(pkg);
+
     if (!fs.existsSync(data.destination)) {
         fs.mkdirSync(data.destination, { recursive: true });
     }
-    fs.writeFileSync(generatedFilePath, toString(fileNode));
+    fs.writeFileSync(generatedFilePath, plantUmlString);
     return generatedFilePath;
 }
 
