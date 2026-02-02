@@ -5,7 +5,7 @@
         "grammar": "src/language/class-diagram.langium",
         "fileExtensions": [".cdiag"],
         "textMate": {
-            "out": "syntaxes/class-diagram.tmLanguage.json"
+            "out": "syntaxes/myclass-diagram.tmLanguage.json"
         },
         "monarch": {
             "out": "src/syntaxes/class-diagram.monarch.ts"
