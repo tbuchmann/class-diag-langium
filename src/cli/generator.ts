@@ -10,6 +10,7 @@ const typeMap = new Map<string, string>();
     typeMap.set('String', 'String');
     typeMap.set('Boolean', 'Boolean');
     typeMap.set('Integer', 'Integer');
+    typeMap.set('Date', 'Date');
 
 export function generateCode(model: Model, filePath: string, destination: string | undefined): string {
    const allTypes = collectAllTypes(model);
@@ -93,6 +94,60 @@ function findRoot(type: Type) : Model {
         current = current.$container;
     }
     return model;
+}
+
+function generateImports(type: Class | Interface, usedTypes: Set<Type>): string {
+    const imports = new Set<string>();
+    
+    // Add import for java.util.Date if used
+    usedTypes.forEach(usedType => {
+        if (usedType.$type === 'PrimitiveType' && usedType.name === 'Date') {
+            imports.add('import java.util.Date;');
+        }
+    });
+    
+    // Add imports for types from different packages
+    usedTypes.forEach(usedType => {
+        if (usedType.$type !== 'PrimitiveType') {
+            const typePackage = usedType.$container;
+            const currentPackage = type.$container;
+            
+            // Check if the type is in a different package
+            if (typePackage !== currentPackage) {
+                const typeQualifiedName = getQualifiedName(typePackage as Package, '.');
+                imports.add(`import ${typeQualifiedName}.${usedType.name};`);
+            }
+        }
+    });
+    
+    return Array.from(imports).sort().join('\n');
+}
+
+function generateImportsForDataType(type: DataType, usedTypes: Set<Type>): string {
+    const imports = new Set<string>();
+    
+    // Add import for java.util.Date if used
+    usedTypes.forEach(usedType => {
+        if (usedType.$type === 'PrimitiveType' && usedType.name === 'Date') {
+            imports.add('import java.util.Date;');
+        }
+    });
+    
+    // Add imports for types from different packages
+    usedTypes.forEach(usedType => {
+        if (usedType.$type !== 'PrimitiveType') {
+            const typePackage = usedType.$container;
+            const currentPackage = type.$container;
+            
+            // Check if the type is in a different package
+            if (typePackage !== currentPackage) {
+                const typeQualifiedName = getQualifiedName(typePackage as Package, '.');
+                imports.add(`import ${typeQualifiedName}.${usedType.name};`);
+            }
+        }
+    });
+    
+    return Array.from(imports).sort().join('\n');
 }
 
 export function generatePlantUmlString(pkg: Package): string {
@@ -183,6 +238,36 @@ export function generateJavaClass(clz: Class, pkgName: string, filePath: string,
 
     const hasMultipleProperties = clz.properties?.some(prop => prop.upper !== undefined && prop.upper > 1) || clz.operations?.some(op => op.upper !== undefined && op.upper > 1) || assocs.some(assoc => assoc.properties?.some(prop => prop.upper !== undefined && (prop.upper > 1 || prop.upper === -1)));         
 
+    // Collect all types used in the class
+    const usedTypes = new Set<Type>();
+    clz.properties?.forEach(prop => {
+        if (prop.type?.ref) usedTypes.add(prop.type.ref);
+    });
+    clz.operations?.forEach(op => {
+        if (op.type?.ref) usedTypes.add(op.type.ref);
+        (op as Operation).params?.forEach(param => {
+            if (param.type?.ref) usedTypes.add(param.type.ref);
+        });
+    });
+    assocs.forEach(assoc => {
+        assoc.properties?.forEach(prop => {
+            if ((prop as Property).type?.ref !== clz && prop.type?.ref) {
+                usedTypes.add(prop.type.ref);
+            }
+        });
+    });
+
+    // Collect superclasses and superinterfaces
+    clz.superClasses?.forEach(sc => {
+        if (sc.ref) usedTypes.add(sc.ref);
+    });
+    clz.superInterfaces?.forEach(si => {
+        if (si.ref) usedTypes.add(si.ref);
+    });
+
+    // Generate imports
+    const imports = generateImports(clz, usedTypes);
+
     //${(prop as Property).vis ?? ''}
 
     // TODO: what about reflexive associations?
@@ -194,6 +279,7 @@ export function generateJavaClass(clz: Class, pkgName: string, filePath: string,
 
     const fileNode = expandToNode`
         package ${getQualifiedName(clz.$container, '.')};
+        ${imports}
         ${hasMultipleProperties ? `import java.util.List;\nimport java.util.ArrayList;\nimport java.util.Collections;` : ''}
 
         public ${clz.abstract ? 'abstract ':''}class ${clz.name} ${printExtendsAndImplements(clz)} {
@@ -229,8 +315,27 @@ export function generateJavaInterface(inf: Interface, pkgName: string, filePath:
     const data = extractDestinationAndName(filePath, destination + "/" + getQualifiedName(inf.$container, '/'));
     const generatedFilePath = `${path.join(data.destination, inf.name)}.java`;
 
+    // Collect all types used in the interface
+    const usedTypes = new Set<Type>();
+    inf.properties?.forEach(prop => {
+        if (prop.type?.ref) usedTypes.add(prop.type.ref);
+    });
+    inf.operations?.forEach(op => {
+        if (op.type?.ref) usedTypes.add(op.type.ref);
+        (op as Operation).params?.forEach(param => {
+            if (param.type?.ref) usedTypes.add(param.type.ref);
+        });
+    });
+    inf.superInterfaces?.forEach(si => {
+        if (si.ref) usedTypes.add(si.ref);
+    });
+
+    // Generate imports
+    const imports = generateImports(inf, usedTypes);
+
     const fileNode = expandToNode`
         package ${getQualifiedName(inf.$container, '.')};
+        ${imports}
 
         public interface ${inf.name} ${printExtends(inf)} {
             ${inf.properties?.map(prop => `${printType(prop)} ${prop.name} = null;`).join('\n')}
@@ -378,8 +483,18 @@ function generateJavaRecord(type: DataType, name: string, filePath: string, dest
     const data = extractDestinationAndName(filePath, destination + "/" + getQualifiedName(type.$container, '/'));
     const generatedFilePath = `${path.join(data.destination, type.name)}.java`;
 
+    // Collect all types used in the data type
+    const usedTypes = new Set<Type>();
+    type.properties?.forEach(prop => {
+        if (prop.type?.ref) usedTypes.add(prop.type.ref);
+    });
+
+    // Generate imports for data types
+    const imports = generateImportsForDataType(type, usedTypes);
+
     const fileNode = expandToNode`
         package ${getQualifiedName(type.$container, '.')};
+        ${imports}
 
         public record ${type.name}(${type.properties?.map(prop => `${printType(prop)} ${prop.name}`).join(', ')}) {}
     `.appendNewLineIfNotEmpty();
