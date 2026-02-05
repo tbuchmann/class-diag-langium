@@ -20,6 +20,8 @@ export function generateCode(model: Model, filePath: string, destination: string
             generateJavaInterface(type, type.$container.name, filePath, destination);
         } else if (type.$type === 'DataType') {
             generateJavaRecord(type, type.$container.name, filePath, destination);
+        } else if (type.$type === 'Enumeration') {
+            generateJavaEnum(type, type.$container.name, filePath, destination);
         }
     });    
    
@@ -380,6 +382,25 @@ function generateJavaRecord(type: DataType, name: string, filePath: string, dest
         package ${getQualifiedName(type.$container, '.')};
 
         public record ${type.name}(${type.properties?.map(prop => `${printType(prop)} ${prop.name}`).join(', ')}) {}
+    `.appendNewLineIfNotEmpty();
+
+    if (!fs.existsSync(data.destination)) {
+        fs.mkdirSync(data.destination, { recursive: true });
+    }
+    fs.writeFileSync(generatedFilePath, toString(fileNode));
+    return generatedFilePath;
+}
+
+function generateJavaEnum(type: Enumeration, name: string, filePath: string, destination: string | undefined) {
+    const data = extractDestinationAndName(filePath, destination + "/" + getQualifiedName(type.$container, '/'));
+    const generatedFilePath = `${path.join(data.destination, type.name)}.java`;
+
+    const fileNode = expandToNode`
+        package ${getQualifiedName(type.$container, '.')};
+
+        public enum ${type.name} {
+          ${type.literals?.map(lit => `${lit}`).join(', ')}
+        }
     `.appendNewLineIfNotEmpty();
 
     if (!fs.existsSync(data.destination)) {
