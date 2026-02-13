@@ -1,7 +1,9 @@
 grammar ClassDiagram
 
 type Type =
-    Class | Interface | DataType | PrimitiveType | Enumeration | Association;
+    Classifier | DataType | PrimitiveType | Enumeration | Association;
+
+type Classifier = Class | Interface;
 
 entry Model:
     packages+=Package*;
@@ -27,10 +29,10 @@ Property returns TypedElement:
     ;
 
 Operation returns TypedElement:
-    {infer Operation} (vis=VisibilityKind)? (static?='static')? (abstract?='abstract')? name=ID '(' (params+=Parameter (',' params+=Parameter)*)? ')' (':' type=[Type:ID] ('[' lower=INT '..' upper=INT ']')?)?
-    ('desc' description=STRING)?
-    ('impl' implementation=STRING)?
-    ;
+    {infer Operation} (vis=VisibilityKind)? (static?='static')? (abstract?='abstract')? name=ID '(' (params+=Parameter (',' params+=Parameter)*)? ')' (':' type=[Type:ID] ('[' lower=INT '..' upper=INT ']')?)? '{'
+    ('spec' description=STRING)?
+    ('impl' target=ID content=IMPL_BODY)?
+    '}';
 
 Parameter returns TypedElement:
     {infer Parameter} name=ID ':' type=[Type:ID] ('[' lower=INT '..' upper=INT ']')?;
@@ -65,6 +67,10 @@ Association returns Type:
     {infer Association} 'assoc' name=ID '{'
         properties+=Property*
     '}';
+
+// ImplContent:
+//     body+=( ID )+
+//     ;
 /*
 MemberEnd:
     prop=Property (kind=AggregationKind)? (navigable?='+') ;
@@ -86,3 +92,5 @@ terminal STRING: /"(\\.|[^"\\])*"|'(\\.|[^'\\])*'/;
 
 hidden terminal ML_COMMENT: /\/\*[\s\S]*?\*\//;
 hidden terminal SL_COMMENT: /\/\/[^\n\r]*/;
+
+terminal IMPL_BODY: /<<[\s\S]*?>>/;

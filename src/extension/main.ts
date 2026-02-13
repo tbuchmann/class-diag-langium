@@ -7,12 +7,46 @@ import { createClassDiagramServices } from '../language/class-diagram-module.js'
 import { extractAstNode } from '../cli/cli-util.js';
 import { NodeFileSystem } from 'langium/node';
 import { Model } from '../language/generated/ast.js';
+import { execSync } from 'node:child_process';
+import * as fs from 'node:fs';
 import chalk from 'chalk';
+import { DiagramProvider } from './diagram-provider.js';
 
 let client: LanguageClient;
+let diagramProvider: DiagramProvider;
 
 // This function is called when the extension is activated.
 export function activate(context: vscode.ExtensionContext): void {
+    diagramProvider = DiagramProvider.getInstance();
+
+    // Register the webview panel serializer
+    context.subscriptions.push(
+        vscode.window.registerWebviewPanelSerializer(DiagramProvider.viewType, diagramProvider)
+    );
+
+    // Command to open preview
+    const openPreviewCommand = vscode.commands.registerCommand('class-diagram.openPreview', async (uri: vscode.Uri | undefined) => {
+        const editor = vscode.window.activeTextEditor;
+        if (editor && editor.document.fileName.endsWith('.cdiag')) {
+            await diagramProvider.openPreview(editor);
+        } else {
+            vscode.window.showErrorMessage('Please open a .cdiag file first');
+        }
+    });
+
+    // On document change, update the preview if it exists
+    const onChangeDisposable = vscode.workspace.onDidChangeTextDocument((event) => {
+        if (event.document.fileName.endsWith('.cdiag')) {
+            if (diagramProvider.hasPanel(event.document.fileName)) {
+                diagramProvider.updateWebviewContent(
+                    (diagramProvider as any).panels.get(event.document.fileName),
+                    event.document
+                );
+            }
+        }
+    });
+
+    // On save, generate diagrams to file (existing functionality)
     let disposable = vscode.workspace.onDidSaveTextDocument((document) => {        
         if (document.fileName.endsWith('.cdiag')) {
             const filePath = document.fileName;
@@ -38,6 +72,8 @@ export function activate(context: vscode.ExtensionContext): void {
 
     context.subscriptions.push(disposable);
     context.subscriptions.push(disposable2);
+    context.subscriptions.push(openPreviewCommand);
+    context.subscriptions.push(onChangeDisposable);
     client = startLanguageClient(context);
 }
 
@@ -66,6 +102,33 @@ export const generateCodeAction = async (fileName: string, destination: string):
     const model = await extractAstNode<Model>(fileName, services);
     const generatedFilePath = generateCode(model, fileName, destination);
     console.log(chalk.green(`Code generated successfully: ${generatedFilePath}`));
+    // 2. Alle generierten Java-Dateien finden
+    try {
+        // Wir sagen TypeScript explizit, dass wir ein Array von Strings erwarten
+        // Das "as string[]" löst den TS2349 Fehler
+        const allFiles = fs.readdirSync(destination, { recursive: true }) as string[];
+
+        const javaFiles = allFiles
+            .filter((f: string) => f.endsWith('.java')) // Expliziter Typ (f: string) löst TS7006
+            .map((f: string) => path.join(destination, f));
+
+        if (javaFiles.length === 0) {
+            console.log(chalk.yellow("No Java files found to format."));
+            return;
+        }
+
+        console.log(chalk.blue(`Formatting ${javaFiles.length} Java files...`));
+
+        const fileList = javaFiles.map((f: string) => `"${f}"`).join(' ');
+
+        execSync(`npx -y google-java-format --replace ${fileList}`, {
+            stdio: 'inherit'
+        });
+
+        console.log(chalk.green(`Code generated and formatted successfully.`));
+    } catch (error) {
+        console.error(chalk.red('Formatting failed:'), error);
+    }
 };
 
 function startLanguageClient(context: vscode.ExtensionContext): LanguageClient {
