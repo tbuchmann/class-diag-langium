@@ -30,7 +30,7 @@ describe('Validating', () => {
                     public a : Integer
                     private b : String
                     c : String
-                    protected doSmth(test : String) : Integer
+                    protected doSmth(test : String) : Integer {}
                 }
                 interface ITest {}
                 enum ETest {A, B, C}
@@ -88,7 +88,7 @@ describe('Validating', () => {
             package de {
                 primitive Integer
                 class Test {
-                    public DoSmth(test : Integer) : Integer
+                    public DoSmth(test : Integer) : Integer {}
                 }
             }
         `);
@@ -146,8 +146,8 @@ describe('Validating', () => {
             package de {
                 primitive Integer
                 class Test {
-                    public a() : Integer
-                    public a() : Integer
+                    public a() : Integer {}
+                    public a() : Integer {}
                 }
             }
         `);

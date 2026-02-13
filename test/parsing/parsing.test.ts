@@ -74,7 +74,7 @@ describe('Parsing tests', () => {
             package de {
                 class Test {
                     static a : Integer
-                    static doSmth(test : String) : Integer
+                    static doSmth(test : String) : Integer {}
                 }
             }
         `);        
@@ -154,7 +154,7 @@ describe('Parsing tests', () => {
                     public a : Integer
                     private b : String
                     c : String
-                    protected doSmth(test : String) : Integer
+                    protected doSmth(test : String) : Integer {}
                 }
             }
         `);        
