@@ -1,6 +1,6 @@
 [![Node.js CI](https://github.com/tbuchmann/class-diag-langium/actions/workflows/node.js.yml/badge.svg)](https://github.com/tbuchmann/class-diag-langium/actions/workflows/node.js.yml)
 
-# Textual DSL for modeling class diagrams
+# Textual modeling language for class diagrams
 
 This project contains the source code for a VS Code extension that allows to specify UML class diagrams using a textual concrete syntax. The textual language was created using Langium.
 
