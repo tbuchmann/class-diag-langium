@@ -88,6 +88,11 @@
                 "category": "Class Diagram"
             },
             {
+                "command": "class-diagram.generateSpring",
+                "title": "Generate Spring Code",
+                "category": "Class Diagram"
+            },
+            {
                 "command": "class-diagram.openPreview",
                 "title": "Open Diagram Preview",
                 "category": "Class Diagram",
@@ -98,6 +103,11 @@
             "explorer/context": [
                 {
                     "command": "class-diagram.generate",
+                    "when": "resourceExtname == .cdiag",
+                    "group": "navigation"
+                },
+                {
+                    "command": "class-diagram.generateSpring",
                     "when": "resourceExtname == .cdiag",
                     "group": "navigation"
                 }

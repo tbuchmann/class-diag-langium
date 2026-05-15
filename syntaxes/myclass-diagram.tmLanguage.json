@@ -1,65 +1,71 @@
 {
   "name": "class-diagram",
   "scopeName": "source.class-diagram",
-  "fileTypes": [".cdiag"],
-  "patterns": [
-    { "include": "#comments" },
-    { "include": "#impl-block" },
-    { "include": "#keywords" },
-    { "include": "#types" },
-    { "include": "#strings" }
+  "fileTypes": [
+    ".cdiag"
   ],
-  "repository": {
-    "keywords": {
+  "patterns": [
+    {
+      "include": "#comments"
+    },
+    {
       "name": "keyword.control.class-diagram",
       "match": "\\b(abstract|assoc|class|composite|datatype|enum|extends|impl|implements|interface|none|package|primitive|private|protected|public|shared|spec|static|x)\\b"
     },
-    "impl-block": {
-      "begin": "\\b(impl)\\s+([a-zA-Z]+)\\s+<<",
-      "beginCaptures": {
-        "1": { "name": "keyword.control.class-diagram" },
-        "2": { "name": "entity.name.type.class-diagram" }
-      },
-      "end": ">>",
+    {
+      "name": "string.quoted.double.class-diagram",
+      "begin": "\"",
+      "end": "\"",
       "patterns": [
-        { "include": "source.java" },
-        { "include": "source.python" }
+        {
+          "include": "#string-character-escape"
+        }
       ]
     },
-    "types": {
+    {
+      "name": "string.quoted.single.class-diagram",
+      "begin": "'",
+      "end": "'",
       "patterns": [
-          {
-              "match": "(?<=:)\\s*([a-zA-Z_][a-zA-Z0-9_]*)",
-              "captures": {
-                  "1": { "name": "entity.name.type.class-diagram" }
-              }
-          },
-          {
-              "match": "\\b(String|Integer|Boolean|Float|Decimal|void)\\b",
-              "name": "support.type.primitive.class-diagram"
-          }
+        {
+          "include": "#string-character-escape"
+        }
       ]
-    },
+    }
+  ],
+  "repository": {
     "comments": {
       "patterns": [
         {
           "name": "comment.block.class-diagram",
           "begin": "/\\*",
-          "end": "\\*/"
+          "beginCaptures": {
+            "0": {
+              "name": "punctuation.definition.comment.class-diagram"
+            }
+          },
+          "end": "\\*/",
+          "endCaptures": {
+            "0": {
+              "name": "punctuation.definition.comment.class-diagram"
+            }
+          }
         },
         {
-          "name": "comment.line.class-diagram",
-          "match": "//.*"
+          "begin": "//",
+          "beginCaptures": {
+            "1": {
+              "name": "punctuation.whitespace.comment.leading.class-diagram"
+            }
+          },
+          "end": "(?=$)",
+          "name": "comment.line.class-diagram"
         }
       ]
     },
-    "strings": {
-      "name": "string.quoted.double.class-diagram",
-      "begin": "\"",
-      "end": "\"",
-      "patterns": [
-        { "match": "\\\\.", "name": "constant.character.escape.class-diagram" }
-      ]
+    "string-character-escape": {
+      "name": "constant.character.escape.class-diagram",
+      "match": "\\\\(x[0-9A-Fa-f]{2}|u[0-9A-Fa-f]{4}|u\\{[0-9A-Fa-f]+\\}|[0-2][0-7]{0,2}|3[0-6][0-7]?|37[0-7]?|[4-7][0-7]?|.|$)"
     }
   }
 }

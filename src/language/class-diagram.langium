@@ -38,20 +38,20 @@ Parameter returns TypedElement:
     {infer Parameter} name=ID ':' type=[Type:ID] ('[' lower=INT '..' upper=INT ']')?;
 
 Class returns Type:
-    {infer Class} (vis=VisibilityKind)? (abstract?='abstract')? 'class' name=ID 
+    {infer Class} (vis=VisibilityKind)? (abstract?='abstract')? (stereotype=STEREOTYPE)? 'class' name=ID 
     ('extends' superClasses+=[Class:ID] (',' superClasses+=[Class:ID])*)? 
-    ('implements' superInterfaces+=[Interface:ID] (',' superInterfaces+=[Interface:ID])*)? '{'
+    ('implements' superInterfaces+=[Interface:ID] (',' superInterfaces+=[Interface:ID])*)? '{'  
         (properties+=Property | operations+=Operation)*
     '}';
 
 Interface returns Type:
-    {infer Interface} (vis=VisibilityKind)? 'interface' name=ID 
+    {infer Interface} (vis=VisibilityKind)? (stereotype=STEREOTYPE)? 'interface' name=ID 
     ('extends' superInterfaces+=[Interface:ID] (',' superInterfaces+=[Interface:ID])*)? '{'
         (properties+=Property | operations+=Operation)*
     '}';
 
 DataType returns Type:
-    {infer DataType} (vis=VisibilityKind)? 'datatype' name=ID '{'
+    {infer DataType} (vis=VisibilityKind)? (stereotype=STEREOTYPE)? 'datatype' name=ID '{'
         properties+=Property*
     '}';
 
@@ -85,6 +85,8 @@ VisibilityKind returns string:
 QualifiedName returns string:
     ID ('.' ID)*;
 */
+terminal STEREOTYPE: /@(entity|mappedsuperclass|embeddable|service|dto|request|response|ignore|joined)/;
+
 hidden terminal WS: /\s+/;
 terminal ID: /[_a-zA-Z][\w_]*/;
 terminal INT returns number: /-?[0-9]+/;

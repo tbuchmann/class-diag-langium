@@ -255,6 +255,155 @@ describe('Validating', () => {
     });
 });
 
+// ---------------------------------------------------------------------------
+// Iteration 2.7 – Validator-Warnungen
+// ---------------------------------------------------------------------------
+describe('checkImplicitManyToOne', () => {
+
+    test('Class-typed property without explicit assoc produces warning', async () => {
+        document = await parse(`
+            package test {
+                class Order { }
+                class LineItem {
+                    order : Order
+                }
+            }
+        `);
+        expect(document.parseResult.parserErrors).toHaveLength(0);
+        const msgs = document?.diagnostics?.map(d => d.message) ?? [];
+        expect(msgs.some(m => m.includes("Property 'order'") && m.includes('implicit @ManyToOne'))).toBe(true);
+    });
+
+    test('Class-typed property covered by explicit assoc produces no warning', async () => {
+        document = await parse(`
+            package test {
+                class Order { }
+                class LineItem {
+                    order : Order
+                }
+                assoc OrderItems {
+                    lineItems : LineItem [0..-1]
+                    order : Order
+                }
+            }
+        `);
+        expect(document.parseResult.parserErrors).toHaveLength(0);
+        const msgs = document?.diagnostics?.map(d => d.message) ?? [];
+        expect(msgs.some(m => m.includes("Property 'order'") && m.includes('implicit @ManyToOne'))).toBe(false);
+    });
+});
+// ---------------------------------------------------------------------------
+// Iteration 2.8 – E2E-Validator (alle Phase-2-Warnungen kombiniert)
+// ---------------------------------------------------------------------------
+describe('E2E validator – Phase 2 combined model', () => {
+
+    test('Vollständiges Phase-2-Modell hat keine unerwarteten Fehler', async () => {
+        document = await parse(`
+            package com {
+                package example {
+                    primitive String
+                    primitive Long
+                    primitive Boolean
+
+                    abstract @joined class Vehicle {
+                        brand : String
+                    }
+
+                    class Car extends Vehicle {
+                        seats : Long
+                    }
+
+                    @mappedsuperclass class AuditBase {
+                        createdBy : String
+                    }
+
+                    @ignore class InternalHelper { }
+
+                    @embeddable class Address {
+                        street : String
+                    }
+
+                    @dto datatype CreateCarRequest {
+                        brand : String
+                    }
+
+                    @response datatype CarListResponse {
+                        items : String [0..-1]
+                    }
+
+                    interface CarService {
+                        findById(id : Long) : Long {}
+                    }
+
+                    assoc VehicleAddress {
+                        vehicle : Vehicle [0..-1]
+                        address : Address
+                    }
+                }
+            }
+        `);
+        expect(document.parseResult.parserErrors).toHaveLength(0);
+        // No @error-level diagnostics expected
+        const errors = document?.diagnostics?.filter(d => d.severity === 1) ?? [];
+        expect(errors).toHaveLength(0);
+    });
+
+    test('Explicit assoc verhindert implicit-ManyToOne-Warnung im kombinierten Modell', async () => {
+        document = await parse(`
+            package com {
+                package example {
+                    primitive String
+                    class Department { name : String }
+                    class Employee {
+                        dept : Department
+                    }
+                    assoc EmpDept {
+                        employees : Employee [0..-1]
+                        dept : Department
+                    }
+                }
+            }
+        `);
+        expect(document.parseResult.parserErrors).toHaveLength(0);
+        const msgs = document?.diagnostics?.map(d => d.message) ?? [];
+        expect(msgs.some(m => m.includes("Property 'dept'") && m.includes('implicit @ManyToOne'))).toBe(false);
+    });
+});
+describe('checkDtoPackageConvention', () => {
+
+    test('DataType in dto package without stereotype produces hint', async () => {
+        document = await parse(`
+            package test {
+                package dto {
+                    primitive String
+                    datatype SearchReq {
+                        query : String
+                    }
+                }
+            }
+        `);
+        expect(document.parseResult.parserErrors).toHaveLength(0);
+        const msgs = document?.diagnostics?.map(d => d.message) ?? [];
+        expect(msgs.some(m => m.includes("SearchReq") && m.includes('@dto'))).toBe(true);
+    });
+
+    test('DataType in dto package with @dto stereotype produces no hint', async () => {
+        document = await parse(`
+            package test {
+                package dto {
+                    primitive String
+                    @dto datatype SearchReq {
+                        query : String
+                    }
+                }
+            }
+        `);
+        expect(document.parseResult.parserErrors).toHaveLength(0);
+        const msgs = document?.diagnostics?.map(d => d.message) ?? [];
+        expect(msgs.some(m => m.includes("SearchReq") && m.includes('should carry a @dto'))).toBe(false);
+    });
+});
+
 function checkDocumentValid(document: LangiumDocument): string | undefined {
     return document.parseResult.parserErrors.length && s`
         Parser errors:

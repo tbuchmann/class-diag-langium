@@ -1,0 +1,61 @@
+// sample-phase2.cdiag
+// Demonstrates all Phase-2 stereotype features
+
+package com {
+    package example {
+
+        // Primitive types
+        primitive String
+        primitive Long
+        primitive Boolean
+
+        // @joined abstract base → real @Entity with JOINED strategy
+        abstract @joined class Vehicle {
+            brand : String
+            active : Boolean
+        }
+
+        // Concrete subclass – gets its own @Entity + repository
+        class Car extends Vehicle {
+            seats : Long
+        }
+
+        // @mappedsuperclass – no @Entity, no repository
+        @mappedsuperclass class AuditBase {
+            createdBy : String
+        }
+
+        // @ignore – no output at all
+        @ignore class InternalHelper { }
+
+        // @embeddable class – @Embeddable, no repository
+        @embeddable class Address {
+            street : String
+        }
+
+        // @dto datatype → Java record
+        @dto datatype CreateCarRequest {
+            brand : String
+            seats : Long
+        }
+
+        // @response datatype with List<T>
+        @response datatype CarListResponse {
+            items : String [0..-1]
+        }
+
+        // Interface with operations → @Service impl
+        interface CarService {
+            findById(id : Long) : Long {}
+            deactivate(id : Long) {
+                spec "Sets active=false for the given car."
+            }
+        }
+
+        // Association covering the Vehicle→Address reference
+        assoc VehicleAddress {
+            vehicle : Vehicle [0..-1]
+            address : Address
+        }
+    }
+}

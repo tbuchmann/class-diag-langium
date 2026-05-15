@@ -1,0 +1,60 @@
+@startuml
+class String <<PrimitiveType>>
+class Long <<PrimitiveType>>
+class Boolean <<PrimitiveType>>
+class CreateCarRequest <<DataType>> {                
+            ~  brand : String 
+~  seats : Long             
+          }
+class CarListResponse <<DataType>> {                
+            ~  items : String [0..*]            
+          }
+abstract class joined {                
+          
+          
+        }
+class Vehicle {                
+          ~  brand : String 
+~  active : Boolean 
+          
+        }
+class Car {                
+          ~  seats : Long 
+          
+        }
+class AuditBase {                
+          ~  createdBy : String 
+          
+        }
+class InternalHelper {                
+          
+          
+        }
+class Address {                
+          ~  street : String 
+          
+        }
+
+interface CarService {
+          
+                ~ findById(id : Long) : Long
+~ deactivate(id : Long) : undefined
+        }
+
+
+Vehicle <|-- Car
+
+
+
+
+
+
+
+
+
+
+Vehicle "-1" -- "1" Address : VehicleAddress >
+hide <<DataType>> circle
+hide <<PrimitiveType>> circle
+hide <<PrimitiveType>> members
+@enduml

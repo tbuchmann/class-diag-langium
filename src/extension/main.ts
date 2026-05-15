@@ -3,6 +3,7 @@ import * as vscode from 'vscode';
 import * as path from 'node:path';
 import { LanguageClient, TransportKind } from 'vscode-languageclient/node.js';
 import { generateDiagrams, generateCode } from '../cli/generator.js';
+import { generateSpringCode } from '../cli/generatorSpring.js';
 import { createClassDiagramServices } from '../language/class-diagram-module.js';
 import { extractAstNode } from '../cli/cli-util.js';
 import { NodeFileSystem } from 'langium/node';
@@ -70,8 +71,20 @@ export function activate(context: vscode.ExtensionContext): void {
         vscode.window.showInformationMessage('Code generation completed');
     });
 
+    const disposable3 = vscode.commands.registerCommand('class-diagram.generateSpring', (uri: vscode.Uri) => {
+        const filePath = uri ? uri.fsPath : vscode.window.activeTextEditor?.document.fileName;
+        if (!filePath) {
+            vscode.window.showErrorMessage('No .cdiag file selected.');
+            return;
+        }
+        const directoryPath = path.dirname(filePath);
+        generateSpringCodeAction(filePath, directoryPath + '/src-spring');
+        vscode.window.showInformationMessage('Spring code generation completed');
+    });
+
     context.subscriptions.push(disposable);
     context.subscriptions.push(disposable2);
+    context.subscriptions.push(disposable3);
     context.subscriptions.push(openPreviewCommand);
     context.subscriptions.push(onChangeDisposable);
     client = startLanguageClient(context);
@@ -95,6 +108,13 @@ export const generateAction = async (fileName: string, destination: string): Pro
     });*/
     const generatedFilePath = generateDiagrams(model, fileName, destination);
     console.log(chalk.green(`Code generated successfully: ${generatedFilePath}`));
+};
+
+export const generateSpringCodeAction = async (fileName: string, destination: string): Promise<void> => {
+    const services = createClassDiagramServices(NodeFileSystem).ClassDiagram;
+    const model = await extractAstNode<Model>(fileName, services);
+    const outDir = generateSpringCode(model, fileName, destination);
+    console.log(chalk.green(`Spring code generated successfully in: ${outDir}`));
 };
 
 export const generateCodeAction = async (fileName: string, destination: string): Promise<void> => {
