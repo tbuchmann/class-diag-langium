@@ -1,5 +1,5 @@
 import type { ValidationAcceptor, ValidationChecks, Reference } from 'langium';
-import type { ClassDiagramAstType, Classifier, Class, Interface, Type, Property, Operation, Enumeration, Package } from './generated/ast.js';
+import type { ClassDiagramAstType, Classifier, Class, Interface, Type, Property, Operation, Enumeration, Package, DataType, Model } from './generated/ast.js';
 import type { ClassDiagramServices } from './class-diagram-module.js';
 
 /**
@@ -9,9 +9,9 @@ export function registerValidationChecks(services: ClassDiagramServices) {
     const registry = services.validation.ValidationRegistry;
     const validator = services.validation.ClassDiagramValidator;
     const checks: ValidationChecks<ClassDiagramAstType> = {
-        Class: [ validator.checkTypeStartsWithCapital, validator.checkNoCycleInClassInheritance, validator.checkDuplicateTypeName],
+        Class: [ validator.checkTypeStartsWithCapital, validator.checkNoCycleInClassInheritance, validator.checkDuplicateTypeName, validator.checkImplicitManyToOne ],
         Interface: [ validator.checkTypeStartsWithCapital, validator.checkNoCycleInInterfaceInheritance, validator.checkDuplicateTypeName],
-        DataType: [ validator.checkTypeStartsWithCapital, validator.checkDuplicateTypeName ],
+        DataType: [ validator.checkTypeStartsWithCapital, validator.checkDuplicateTypeName, validator.checkDtoPackageConvention ],
         Enumeration: [ validator.checkTypeStartsWithCapital, validator.checkDuplicateTypeName, validator.checkDuplicateEnumerationLiteralName, validator.checkEnumLiteralIsCapital ],
         Property: [ validator.checkPropertyStartsWithLower, validator.checkDuplicatePropertyName ],
         Operation: [ validator.checkOperationStartsWithLower, validator.checkDuplicateOperationName ],        
@@ -163,15 +163,63 @@ export class ClassDiagramValidator {
         });
     }
 
-    /* not neccessary...
-    checkDuplicateRootPackageName(m: Model, accept: ValidationAcceptor): void {        
-        let rootPackages = new Array<string>();
-        m.packages.forEach(pkg => {
-            if (rootPackages.includes(pkg.name)) {
-                accept('error', `Duplicate package name '${pkg.name}'.`, { node: m, property: 'packages' });
+    checkImplicitManyToOne(clz: Class, accept: ValidationAcceptor): void {
+        const model: Model | undefined = (() => {
+            let current: Package | undefined = clz.$container as Package;
+            while (current !== undefined) {
+                if ((current.$container as { $type?: string })?.$type === 'Model') {
+                    return current.$container as unknown as Model;
+                }
+                current = current.$container as Package | undefined;
             }
-            rootPackages.push(pkg.name);
+            return undefined;
+        })();
+
+        if (!model) return;
+
+        // find assocs that reference clz on one side and the target property on the other
+        function hasCoveringAssoc(propName: string, referencedClass: Class): boolean {
+            let found = false;
+            function search(pkg: Package) {
+                pkg.types.forEach(t => {
+                    if (t.$type === 'Association') {
+                        const props = (t as { properties?: Property[] }).properties ?? [];
+                        const refersClz = props.some(p => p.type?.ref === clz);
+                        const refersOther = props.some(p => p.type?.ref === referencedClass && p.name === propName);
+                        if (refersClz && refersOther) found = true;
+                    }
+                });
+                pkg.packages.forEach(sub => search(sub));
+            }
+            model!.packages.forEach(pkg => search(pkg));
+            return found;
+        }
+
+        (clz.properties as Property[]).forEach(p => {
+            if (p.type?.ref?.$type === 'Class') {
+                if (!hasCoveringAssoc(p.name, p.type.ref as Class)) {
+                    accept(
+                        'warning',
+                        `Property '${p.name}' references class '${p.type.ref.name}' without an explicit association. ` +
+                        `Consider adding an 'assoc' block (implicit @ManyToOne will be generated).`,
+                        { node: p, property: 'name' },
+                    );
+                }
+            }
         });
-    }*/
-    
+    }
+
+    checkDtoPackageConvention(t: DataType, accept: ValidationAcceptor): void {
+        const pkg = t.$container as Package;
+        const pkgNameLower = pkg.name.toLowerCase();
+        if (!['dto', 'request', 'response'].includes(pkgNameLower)) return;
+        const st: string | undefined = (t as { stereotype?: string }).stereotype;
+        if (st === '@dto' || st === '@request' || st === '@response') return;
+        accept(
+            'hint',
+            `DataType '${t.name}' in a '${pkg.name}' package should carry a @dto, @request, or @response stereotype for clarity.`,
+            { node: t, property: 'name' },
+        );
+    }
+
 }

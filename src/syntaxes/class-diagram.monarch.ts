@@ -10,6 +10,7 @@ export default {
 
     tokenizer: {
         initial: [
+            { regex: /@(entity|mappedsuperclass|embeddable|service|dto|request|response|ignore|joined)/, action: {"token":"STEREOTYPE"} },
             { regex: /[_a-zA-Z][\w_]*/, action: { cases: { '@keywords': {"token":"keyword"}, '@default': {"token":"ID"} }} },
             { regex: /-?[0-9]+/, action: {"token":"number"} },
             { regex: /"(\\.|[^"\\])*"|'(\\.|[^'\\])*'/, action: {"token":"string"} },

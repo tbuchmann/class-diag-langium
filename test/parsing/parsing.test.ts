@@ -300,6 +300,82 @@ describe('Parsing tests', () => {
     });
 });
 
+// ---------------------------------------------------------------------------
+// Iteration 2.1 – STEREOTYPE-Terminal
+// ---------------------------------------------------------------------------
+describe('Stereotype parsing', () => {
+
+    test('@dto datatype is parsed correctly', async () => {
+        const doc = await parse(`
+            package test {
+                @dto datatype Req { }
+            }
+        `);
+        expect(doc.parseResult.parserErrors).toHaveLength(0);
+        const dt = doc.parseResult.value.packages[0].types[0] as any;
+        expect(dt.stereotype).toBe('@dto');
+    });
+
+    test('datatype without stereotype has undefined stereotype', async () => {
+        const doc = await parse(`
+            package test {
+                datatype Addr { }
+            }
+        `);
+        expect(doc.parseResult.parserErrors).toHaveLength(0);
+        const dt = doc.parseResult.value.packages[0].types[0] as any;
+        expect(dt.stereotype).toBeUndefined();
+    });
+
+    test('@joined abstract class is parsed correctly', async () => {
+        const doc = await parse(`
+            package test {
+                abstract @joined class Base { }
+            }
+        `);
+        expect(doc.parseResult.parserErrors).toHaveLength(0);
+        const clz = doc.parseResult.value.packages[0].types[0] as any;
+        expect(clz.stereotype).toBe('@joined');
+        expect(clz.abstract).toBe(true);
+    });
+
+    test('@ignore class is parsed correctly', async () => {
+        const doc = await parse(`
+            package test {
+                @ignore class Helper { }
+            }
+        `);
+        expect(doc.parseResult.parserErrors).toHaveLength(0);
+        const clz = doc.parseResult.value.packages[0].types[0] as any;
+        expect(clz.stereotype).toBe('@ignore');
+    });
+
+    test('@service interface is parsed correctly', async () => {
+        const doc = await parse(`
+            package test {
+                @service interface OrderService { }
+            }
+        `);
+        expect(doc.parseResult.parserErrors).toHaveLength(0);
+        const iface = doc.parseResult.value.packages[0].types[0] as any;
+        expect(iface.stereotype).toBe('@service');
+    });
+
+    test('plain class without stereotype is unaffected', async () => {
+        const doc = await parse(`
+            package test {
+                primitive String
+                class Customer {
+                    name : String
+                }
+            }
+        `);
+        expect(doc.parseResult.parserErrors).toHaveLength(0);
+        const clz = doc.parseResult.value.packages[0].types.find((t: any) => t.$type === 'Class') as any;
+        expect(clz.stereotype).toBeUndefined();
+    });
+});
+
 function checkDocumentValid(document: LangiumDocument): string | undefined {
     return document.parseResult.parserErrors.length && s`
         Parser errors:

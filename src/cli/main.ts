@@ -5,6 +5,7 @@ import { ClassDiagramLanguageMetaData } from '../language/generated/module.js';
 import { createClassDiagramServices } from '../language/class-diagram-module.js';
 import { extractAstNode } from './cli-util.js';
 import { generateCode } from './generator.js';
+import { generateSpringCode } from './generatorSpring.js';
 import { NodeFileSystem } from 'langium/node';
 import * as url from 'node:url';
 import * as fs from 'node:fs/promises';
@@ -19,6 +20,13 @@ export const generateAction = async (fileName: string, opts: GenerateOptions): P
     const model = await extractAstNode<Model>(fileName, services);
     const generatedFilePath = generateCode(model, fileName, opts.destination);
     console.log(chalk.green(`Code generated successfully: ${generatedFilePath}`));
+};
+
+export const generateSpringAction = async (fileName: string, opts: GenerateOptions): Promise<void> => {
+    const services = createClassDiagramServices(NodeFileSystem).ClassDiagram;
+    const model = await extractAstNode<Model>(fileName, services);
+    const destination = generateSpringCode(model, fileName, opts.destination);
+    console.log(chalk.green(`Spring code generated successfully in: ${destination}`));
 };
 
 export type GenerateOptions = {
@@ -37,6 +45,13 @@ export default function(): void {
         .option('-d, --destination <dir>', 'destination directory of generating')
         .description('generates JavaScript code that prints "Hello, {name}!" for each greeting in a source file')
         .action(generateAction);
+
+    program
+        .command('generate-spring')
+        .argument('<file>', `source file (possible file extensions: ${fileExtensions})`)
+        .option('-d, --destination <dir>', 'destination directory of generating')
+        .description('generates Spring Boot / JPA code (entities, embeddables, enums, repositories)')
+        .action(generateSpringAction);
 
     program.parse(process.argv);
 }
