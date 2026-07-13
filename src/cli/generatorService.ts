@@ -219,8 +219,8 @@ export function generateService(
     destination: string | undefined,
 ): string {
     const pkg = iface.$container as Package;
-    const pkgPath = getQualifiedName(pkg, '/');
-    const data = extractDestinationAndName(filePath, `${destination}/${pkgPath}/service`);
+    const pkgPath = getQualifiedName(pkg, '/', true);
+    const data = extractDestinationAndName(filePath, `${destination}${pkgPath ? '/' + pkgPath : ''}/service`);
     const generatedFilePath = path.join(data.destination, `${iface.name}Impl.java`);
     const qualifiedPkg = getQualifiedName(pkg, '.');
 
@@ -346,8 +346,8 @@ function generateServiceInterface(
     destination: string | undefined,
 ): string {
     const pkg = iface.$container as Package;
-    const pkgPath = getQualifiedName(pkg, '/');
-    const data = extractDestinationAndName(filePath, `${destination}/${pkgPath}`);
+    const pkgPath = getQualifiedName(pkg, '/', true);
+    const data = extractDestinationAndName(filePath, `${destination}${pkgPath ? '/' + pkgPath : ''}`);
     const generatedFilePath = path.join(data.destination, `${iface.name}.java`);
     const qualifiedPkg = getQualifiedName(pkg, '.');
 

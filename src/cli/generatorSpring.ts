@@ -77,8 +77,11 @@ export function getBasePackage(): string | undefined {
  * Mirrors `getQualifiedName` from generator.ts.
  * Used from iteration 1.2 onwards.
  */
-export function getQualifiedName(pkg: Package, sep: string): string {
+export function getQualifiedName(pkg: Package, sep: string, forPath: boolean = false): string {
     if (basePackageOverride) {
+        if (forPath) {
+            return '';
+        }
         return basePackageOverride.replace(/\./g, sep);
     }
     const names: string[] = [];
@@ -173,7 +176,7 @@ export function generateJpaEnum(
     filePath: string,
     destination: string | undefined,
 ): string {
-    const pkgPath = getQualifiedName(type.$container as Package, '/');
+    const pkgPath = getQualifiedName(type.$container as Package, '/', true);
     const data = extractDestinationAndName(filePath, `${destination}/${pkgPath}/domain`);
     const generatedFilePath = path.join(data.destination, `${type.name}.java`);
 
@@ -229,7 +232,7 @@ export function generateEmbeddable(
     destination: string | undefined,
 ): string {
     const pkg = type.$container as Package;
-    const pkgPath = getQualifiedName(pkg, '/');
+    const pkgPath = getQualifiedName(pkg, '/', true);
     const data = extractDestinationAndName(filePath, `${destination}/${pkgPath}/domain`);
     const generatedFilePath = path.join(data.destination, `${type.name}.java`);
 
@@ -363,7 +366,7 @@ export function generateJpaEntity(
     destination: string | undefined,
 ): string {
     const pkg = clz.$container as Package;
-    const pkgPath = getQualifiedName(pkg, '/');
+    const pkgPath = getQualifiedName(pkg, '/', true);
     const data = extractDestinationAndName(filePath, `${destination}/${pkgPath}/domain`);
     const generatedFilePath = path.join(data.destination, `${clz.name}.java`);
     const qualifiedPkg = getQualifiedName(pkg, '.');
@@ -531,7 +534,7 @@ export function generateSpringRepository(
     filePath: string,
     destination: string | undefined,
 ): string {
-    const pkgPath = getQualifiedName(clz.$container as Package, '/');
+    const pkgPath = getQualifiedName(clz.$container as Package, '/', true);
     const data = extractDestinationAndName(filePath, `${destination}/${pkgPath}/repository`);
     const generatedFilePath = path.join(data.destination, `${clz.name}Repository.java`);
 
@@ -597,7 +600,7 @@ export function generateDto(
     destination: string | undefined,
 ): string {
     const pkg = type.$container as Package;
-    const pkgPath = getQualifiedName(pkg, '/');
+    const pkgPath = getQualifiedName(pkg, '/', true);
     const data = extractDestinationAndName(filePath, `${destination}/${pkgPath}/dto`);
     const generatedFilePath = path.join(data.destination, `${type.name}.java`);
     const qualifiedPkg = getQualifiedName(pkg, '.');
@@ -650,7 +653,7 @@ export function generateServiceImpl(
     destination: string | undefined,
 ): string {
     const pkg = iface.$container as Package;
-    const pkgPath = getQualifiedName(pkg, '/');
+    const pkgPath = getQualifiedName(pkg, '/', true);
     const data = extractDestinationAndName(filePath, `${destination}/${pkgPath}/service`);
     const generatedFilePath = path.join(data.destination, `${iface.name}Impl.java`);
     const qualifiedPkg = getQualifiedName(pkg, '.');

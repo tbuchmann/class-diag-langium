@@ -102,9 +102,8 @@ function camelToHuman(name: string): string {
         .trim();
 }
 
-function buildControllerSource(target: ControllerTarget, delegateType: string, delegateName: string): string {
+function buildControllerSource(target: ControllerTarget, delegateType: string, delegateName: string, pkg: Package): string {
     const lines: string[] = [];
-    const pkg = (target as any).$container as Package;
     const qualifiedPkg = getQualifiedName(pkg, '.');
     const basePath = target.restPath || `/${toSnakeCase(target.name.replace(/(Service|Resource|Controller)$/, ''))}`;
 
@@ -225,8 +224,8 @@ export function generateController(
     destination: string | undefined,
 ): string {
     const pkg = type.$container as Package;
-    const pkgPath = getQualifiedName(pkg, '/');
-    const data = extractDestinationAndName(filePath, `${destination}/${pkgPath}/controller`);
+    const pkgPath = getQualifiedName(pkg, '/', true);
+    const data = extractDestinationAndName(filePath, `${destination}${pkgPath ? '/' + pkgPath : ''}/controller`);
     const capName = type.name.charAt(0).toUpperCase() + type.name.slice(1);
     const generatedFilePath = path.join(data.destination, `${capName}Controller.java`);
 
@@ -239,8 +238,8 @@ export function generateController(
     let delegateType: string;
     let delegateName: string;
     if (isInterface) {
-        delegateType = `${type.name}Impl`;
-        delegateName = type.name.charAt(0).toLowerCase() + type.name.slice(1) + 'Impl';
+        delegateType = type.name;
+        delegateName = type.name.charAt(0).toLowerCase() + type.name.slice(1);
     } else {
         const firstEntity = entityNames[0] ?? type.name;
         delegateType = `${firstEntity}Repository`;
@@ -255,7 +254,7 @@ export function generateController(
         entityNames,
     };
 
-    const source = buildControllerSource(target, delegateType, delegateName);
+    const source = buildControllerSource(target, delegateType, delegateName, pkg);
 
     if (!fs.existsSync(data.destination)) {
         fs.mkdirSync(data.destination, { recursive: true });
