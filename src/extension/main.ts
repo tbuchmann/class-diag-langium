@@ -71,15 +71,37 @@ export function activate(context: vscode.ExtensionContext): void {
         vscode.window.showInformationMessage('Code generation completed');
     });
 
-    const disposable3 = vscode.commands.registerCommand('class-diagram.generateSpring', (uri: vscode.Uri) => {
+    const disposable3 = vscode.commands.registerCommand('class-diagram.generateSpring', async (uri: vscode.Uri) => {
         const filePath = uri ? uri.fsPath : vscode.window.activeTextEditor?.document.fileName;
         if (!filePath) {
             vscode.window.showErrorMessage('No .cdiag file selected.');
             return;
         }
-        const directoryPath = path.dirname(filePath);
-        generateSpringCodeAction(filePath, directoryPath + '/src-spring');
-        vscode.window.showInformationMessage('Spring code generation completed');
+
+        const workspaceFolders = vscode.workspace.workspaceFolders;
+        const defaultRoot = workspaceFolders ? workspaceFolders[0].uri.fsPath : path.dirname(filePath);
+
+        const projectRoot = await vscode.window.showInputBox({
+            prompt: 'Enter the Spring Boot project root directory',
+            value: defaultRoot,
+            ignoreFocusOut: true,
+        });
+        if (projectRoot === undefined) {
+            return; // user cancelled
+        }
+
+        const basePackage = await vscode.window.showInputBox({
+            prompt: 'Enter the base Java package (e.g., com.zufar.icedlatte)',
+            placeHolder: 'com.example',
+            ignoreFocusOut: true,
+        });
+        if (basePackage === undefined) {
+            return; // user cancelled
+        }
+
+        const destination = path.join(projectRoot, 'src', 'main', 'java', ...basePackage.split('.'));
+        generateSpringCodeAction(filePath, destination, basePackage);
+        vscode.window.showInformationMessage('Spring code generated successfully');
     });
 
     context.subscriptions.push(disposable);
@@ -110,10 +132,10 @@ export const generateAction = async (fileName: string, destination: string): Pro
     console.log(chalk.green(`Code generated successfully: ${generatedFilePath}`));
 };
 
-export const generateSpringCodeAction = async (fileName: string, destination: string): Promise<void> => {
+export const generateSpringCodeAction = async (fileName: string, destination: string, basePackage?: string): Promise<void> => {
     const services = createClassDiagramServices(NodeFileSystem).ClassDiagram;
     const model = await extractAstNode<Model>(fileName, services);
-    const outDir = generateSpringCode(model, fileName, destination);
+    const outDir = generateSpringCode(model, fileName, destination, basePackage);
     console.log(chalk.green(`Spring code generated successfully in: ${outDir}`));
 };
 

@@ -1,12 +1,12 @@
 // Monarch syntax highlighting for the class-diagram language.
 export default {
     keywords: [
-        'abstract','assoc','class','composite','datatype','enum','extends','impl','implements','interface','none','package','primitive','private','protected','public','shared','spec','static','x'
+        '@rest','abstract','assoc','class','composite','datatype','enum','extends','impl','implements','interface','none','package','path','preAuthorize','primitive','private','protected','public','shared','spec','static','x'
     ],
     operators: [
-        ',','..','/',':'
+        ',','..','/',':','='
     ],
-    symbols: /\(|\)|,|\.\.|\/|:|\[|\]|\{|\}/,
+    symbols: /\(|\)|,|\.\.|\/|:|=|\[|\]|\{|\}/,
 
     tokenizer: {
         initial: [

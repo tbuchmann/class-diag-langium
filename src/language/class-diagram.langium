@@ -30,6 +30,7 @@ Property returns TypedElement:
 
 Operation returns TypedElement:
     {infer Operation} (vis=VisibilityKind)? (static?='static')? (abstract?='abstract')? name=ID '(' (params+=Parameter (',' params+=Parameter)*)? ')' (':' type=[Type:ID] ('[' lower=INT '..' upper=INT ']')?)? '{'
+    ('preAuthorize' preAuthorize=STRING)?
     ('spec' description=STRING)?
     ('impl' target=ID content=IMPL_BODY)?
     '}';
@@ -37,15 +38,22 @@ Operation returns TypedElement:
 Parameter returns TypedElement:
     {infer Parameter} name=ID ':' type=[Type:ID] ('[' lower=INT '..' upper=INT ']')?;
 
+RestAnnotation:
+    '@rest' ('path' '=' path=STRING)?;
+
 Class returns Type:
-    {infer Class} (vis=VisibilityKind)? (abstract?='abstract')? (stereotype=STEREOTYPE)? 'class' name=ID 
+    {infer Class} (vis=VisibilityKind)? (abstract?='abstract')? (stereotype=STEREOTYPE)?
+    (restAnnotation=RestAnnotation)?
+    'class' name=ID 
     ('extends' superClasses+=[Class:ID] (',' superClasses+=[Class:ID])*)? 
     ('implements' superInterfaces+=[Interface:ID] (',' superInterfaces+=[Interface:ID])*)? '{'  
         (properties+=Property | operations+=Operation)*
     '}';
 
 Interface returns Type:
-    {infer Interface} (vis=VisibilityKind)? (stereotype=STEREOTYPE)? 'interface' name=ID 
+    {infer Interface} (vis=VisibilityKind)? (stereotype=STEREOTYPE)?
+    (restAnnotation=RestAnnotation)?
+    'interface' name=ID 
     ('extends' superInterfaces+=[Interface:ID] (',' superInterfaces+=[Interface:ID])*)? '{'
         (properties+=Property | operations+=Operation)*
     '}';

@@ -404,6 +404,100 @@ describe('checkDtoPackageConvention', () => {
     });
 });
 
+// ---------------------------------------------------------------------------
+// Iteration 1 – REST annotation validation
+// ---------------------------------------------------------------------------
+describe('REST annotation validation', () => {
+
+    test('@rest path without leading slash produces error', async () => {
+        document = await parse(`
+            package test {
+                @rest path="customers"
+                interface CustomerService {
+                    findAll() : String {}
+                }
+            }
+        `);
+        expect(document.parseResult.parserErrors).toHaveLength(0);
+        const msgs = document?.diagnostics?.map(d => d.message) ?? [];
+        expect(msgs.some(m => m.includes("REST path must start with '/"))).toBe(true);
+    });
+
+    test('@rest with valid path produces no path error', async () => {
+        document = await parse(`
+            package test {
+                @rest path="/customers"
+                interface CustomerService {
+                    findAll() : String {}
+                }
+            }
+        `);
+        expect(document.parseResult.parserErrors).toHaveLength(0);
+        const msgs = document?.diagnostics?.map(d => d.message) ?? [];
+        expect(msgs.some(m => m.includes("REST path must start with '/"))).toBe(false);
+    });
+
+    test('@rest interface without operations produces warning', async () => {
+        document = await parse(`
+            package test {
+                @rest path="/empty"
+                interface EmptyService { }
+            }
+        `);
+        expect(document.parseResult.parserErrors).toHaveLength(0);
+        const msgs = document?.diagnostics?.map(d => d.message) ?? [];
+        expect(msgs.some(m => m.includes('has no operations'))).toBe(true);
+    });
+
+    test('@rest interface with operations produces no empty warning', async () => {
+        document = await parse(`
+            package test {
+                primitive String
+                @rest path="/customers"
+                interface CustomerService {
+                    findAll() : String {}
+                }
+            }
+        `);
+        expect(document.parseResult.parserErrors).toHaveLength(0);
+        const msgs = document?.diagnostics?.map(d => d.message) ?? [];
+        expect(msgs.some(m => m.includes('has no operations'))).toBe(false);
+    });
+
+    test('unmappable operation signature produces hint', async () => {
+        document = await parse(`
+            package test {
+                primitive Str
+                primitive Long
+                @rest path="/customers"
+                interface CustomerService {
+                    findNothing() : Str {}
+                }
+            }
+        `);
+        expect(document.parseResult.parserErrors).toHaveLength(0);
+        const msgs = document?.diagnostics?.map(d => d.message) ?? [];
+        expect(msgs.some(m => m.includes('does not match a known REST pattern'))).toBe(true);
+    });
+
+    test('mappable operation signature produces no hint', async () => {
+        document = await parse(`
+            package test {
+                primitive Str
+                primitive Long
+                @rest path="/customers"
+                interface CustomerService {
+                    findAll() : Str [0..-1] {}
+                    findById(id : Long) : Str {}
+                }
+            }
+        `);
+        expect(document.parseResult.parserErrors).toHaveLength(0);
+        const msgs = document?.diagnostics?.map(d => d.message) ?? [];
+        expect(msgs.some(m => m.includes('does not match a known REST pattern'))).toBe(false);
+    });
+});
+
 function checkDocumentValid(document: LangiumDocument): string | undefined {
     return document.parseResult.parserErrors.length && s`
         Parser errors:

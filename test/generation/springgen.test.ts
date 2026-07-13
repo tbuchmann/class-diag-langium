@@ -3,7 +3,8 @@ import { EmptyFileSystem } from "langium";
 import { parseHelper } from "langium/test";
 import { createClassDiagramServices } from "../../src/language/class-diagram-module.js";
 import { Enumeration, DataType, Class, Model } from "../../src/language/generated/ast.js";
-import { toSnakeCase, printSpringType, generateJpaEnum, generateEmbeddable, generateJpaEntity, generateSpringRepository, generateSpringCode, getStereotype, generateDto, isDtoType, generateServiceImpl } from "../../src/cli/generatorSpring.js";
+import { toSnakeCase, printSpringType, generateJpaEnum, generateEmbeddable, generateJpaEntity, generateSpringRepository, generateSpringCode, getStereotype, generateDto, isDtoType } from "../../src/cli/generatorSpring.js";
+import { generateService } from "../../src/cli/generatorService.js";
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
@@ -1202,6 +1203,157 @@ describe('Iteration 2.6 – Service generator', () => {
 });
 
 // ---------------------------------------------------------------------------
+// Iteration 2 – Richer service generator
+// ---------------------------------------------------------------------------
+describe('Iteration 2 – Richer service generator', () => {
+
+    test('Service with CRUD operations generates repository injection and CRUD bodies', async () => {
+        const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'spring-it2a-'));
+        const doc = await parse(`
+            package com {
+                package example {
+                    primitive Long
+                    primitive String
+                    class Customer {
+                        name : String
+                    }
+                    interface CustomerService {
+                        findAll() : String [0..-1] {}
+                        findById(id : Long) : String {}
+                        save(customer : Customer) : Customer {}
+                        deleteById(id : Long) {}
+                    }
+                }
+            }
+        `);
+        expect(doc.parseResult.parserErrors).toHaveLength(0);
+        generateSpringCode(doc.parseResult.value, 'model.cdiag', tmpDir);
+        const content = fs.readFileSync(
+            path.join(tmpDir, 'com', 'example', 'service', 'CustomerServiceImpl.java'), 'utf-8'
+        );
+
+        // Constructor injection
+        expect(content).toContain('private final CustomerRepository customerRepository;');
+        expect(content).toContain('public CustomerServiceImpl(CustomerRepository customerRepository)');
+        expect(content).toContain('this.customerRepository = customerRepository;');
+
+        // CRUD bodies
+        expect(content).toContain('return customerRepository.findAll();');
+        expect(content).toContain('return customerRepository.findById(id).orElseThrow');
+        expect(content).toContain('return customerRepository.save(customer);');
+        expect(content).toContain('customerRepository.deleteById(id);');
+
+        // @Transactional on write operations
+        expect(content).toContain('@Transactional');
+        // findAll and findById should NOT have @Transactional
+        const transactionalCount = (content.match(/@Transactional/g) ?? []).length;
+        expect(transactionalCount).toBe(2); // save + deleteById
+    });
+
+    test('Service with mixed CRUD and custom operations', async () => {
+        const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'spring-it2b-'));
+        const doc = await parse(`
+            package com {
+                package example {
+                    primitive Long
+                    primitive String
+                    class Order {
+                        total : String
+                    }
+                    interface OrderService {
+                        findAll() : String [0..-1] {}
+                        findById(id : Long) : String {}
+                        save(order : Order) : Order {}
+                        deleteById(id : Long) {}
+                        calculateDiscount(order : Order) : String {
+                            spec "Calculate discount based on order total"
+                        }
+                    }
+                }
+            }
+        `);
+        expect(doc.parseResult.parserErrors).toHaveLength(0);
+        generateSpringCode(doc.parseResult.value, 'model.cdiag', tmpDir);
+        const content = fs.readFileSync(
+            path.join(tmpDir, 'com', 'example', 'service', 'OrderServiceImpl.java'), 'utf-8'
+        );
+
+        // CRUD bodies present
+        expect(content).toContain('return orderRepository.findAll();');
+        expect(content).toContain('return orderRepository.findById(id).orElseThrow');
+        expect(content).toContain('return orderRepository.save(order);');
+        expect(content).toContain('orderRepository.deleteById(id);');
+
+        // Custom operation has spec comment and @Transactional
+        expect(content).toContain('@prompt Calculate discount based on order total');
+        expect(content).toContain('@generated NOT');
+        expect(content).toContain('//generated start');
+        expect(content).toContain('//generated end');
+
+        // @Transactional on save, deleteById, and the spec-annotated operation
+        const transactionalCount = (content.match(/@Transactional/g) ?? []).length;
+        expect(transactionalCount).toBe(3);
+    });
+
+    test('Service with no matching entity types produces stubs only', async () => {
+        const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'spring-it2c-'));
+        const doc = await parse(`
+            package com {
+                package example {
+                    primitive String
+                    interface ReportService {
+                        generate(name : String) {}
+                    }
+                }
+            }
+        `);
+        expect(doc.parseResult.parserErrors).toHaveLength(0);
+        generateSpringCode(doc.parseResult.value, 'model.cdiag', tmpDir);
+        const content = fs.readFileSync(
+            path.join(tmpDir, 'com', 'example', 'service', 'ReportServiceImpl.java'), 'utf-8'
+        );
+
+        // No repository injection
+        expect(content).not.toContain('Repository');
+        // Stub body
+        expect(content).toContain('//generated start');
+        expect(content).toContain('//generated end');
+    });
+
+    test('Service with multiple entity types injects multiple repositories', async () => {
+        const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'spring-it2d-'));
+        const doc = await parse(`
+            package com {
+                package example {
+                    primitive Long
+                    primitive String
+                    class Customer { name : String }
+                    class Order { total : String }
+                    interface ReportService {
+                        findById(id : Long) : String {}
+                        save(customer : Customer) : Customer {}
+                        saveOrder(order : Order) : Order {}
+                    }
+                }
+            }
+        `);
+        expect(doc.parseResult.parserErrors).toHaveLength(0);
+        generateSpringCode(doc.parseResult.value, 'model.cdiag', tmpDir);
+        const content = fs.readFileSync(
+            path.join(tmpDir, 'com', 'example', 'service', 'ReportServiceImpl.java'), 'utf-8'
+        );
+
+        // Both repositories injected
+        expect(content).toContain('private final CustomerRepository customerRepository;');
+        expect(content).toContain('private final OrderRepository orderRepository;');
+        expect(content).toContain('import com.example.domain.Customer;');
+        expect(content).toContain('import com.example.repository.CustomerRepository;');
+        expect(content).toContain('import com.example.domain.Order;');
+        expect(content).toContain('import com.example.repository.OrderRepository;');
+    });
+});
+
+// ---------------------------------------------------------------------------
 // Iteration 2.8 – E2E-Tests (alle Phase-2-Features kombiniert)
 // ---------------------------------------------------------------------------
 describe('Iteration 2.8 – E2E combined', () => {
@@ -1361,5 +1513,451 @@ describe('Iteration 2.8 – E2E combined', () => {
         const filePath = path.join(tmpDir, 'com', 'example', 'dto', 'dto', 'SearchRequest.java');
         expect(fs.existsSync(filePath)).toBe(true);
         expect(fs.readFileSync(filePath, 'utf8')).toContain('public record SearchRequest');
+    });
+});
+
+// ---------------------------------------------------------------------------
+// Iteration 3 – REST controller generator
+// ---------------------------------------------------------------------------
+describe('Iteration 3 – REST controller generator', () => {
+
+    test('Interface-based controller generates @RestController with CRUD endpoints', async () => {
+        const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'spring-it3a-'));
+        const doc = await parse(`
+            package com {
+                package example {
+                    primitive Long
+                    primitive String
+                    class Customer { name : String }
+                    @rest path="/customers"
+                    interface CustomerService {
+                        findAll() : String [0..-1] {}
+                        findById(id : Long) : String {}
+                        save(customer : Customer) : Customer {}
+                        deleteById(id : Long) {}
+                    }
+                }
+            }
+        `);
+        expect(doc.parseResult.parserErrors).toHaveLength(0);
+        generateSpringCode(doc.parseResult.value, 'model.cdiag', tmpDir);
+        const content = fs.readFileSync(
+            path.join(tmpDir, 'com', 'example', 'controller', 'CustomerServiceController.java'), 'utf-8'
+        );
+
+        expect(content).toContain('@RestController');
+        expect(content).toContain('@RequestMapping("/customers")');
+        expect(content).toContain('public class CustomerServiceController');
+        expect(content).toContain('private final CustomerServiceImpl customerServiceImpl;');
+        expect(content).toContain('@GetMapping');
+        expect(content).toContain('@DeleteMapping("/{id}")');
+        expect(content).toContain('ResponseEntity');
+        expect(content).toContain('ResponseEntity.noContent().build()');
+    });
+
+    test('Class-based controller generates @RestController with repository injection', async () => {
+        const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'spring-it3b-'));
+        const doc = await parse(`
+            package com {
+                package example {
+                    primitive Long
+                    primitive String
+                    class Product { name : String }
+                    @rest path="/products"
+                    class ProductResource {
+                        findAll() : String [0..-1] {}
+                        findById(id : Long) : String {}
+                    }
+                }
+            }
+        `);
+        expect(doc.parseResult.parserErrors).toHaveLength(0);
+        generateSpringCode(doc.parseResult.value, 'model.cdiag', tmpDir);
+        const content = fs.readFileSync(
+            path.join(tmpDir, 'com', 'example', 'controller', 'ProductResourceController.java'), 'utf-8'
+        );
+
+        expect(content).toContain('@RestController');
+        expect(content).toContain('@RequestMapping("/products")');
+        expect(content).toContain('private final ProductResourceRepository pProductResourceRepository;');
+        expect(content).toContain('@GetMapping');
+    });
+
+    test('Controller with unmappable operation generates fallback mapping', async () => {
+        const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'spring-it3c-'));
+        const doc = await parse(`
+            package com {
+                package example {
+                    primitive String
+                    class Item { name : String }
+                    @rest path="/items"
+                    interface ItemService {
+                        weirdOp() {}
+                    }
+                }
+            }
+        `);
+        expect(doc.parseResult.parserErrors).toHaveLength(0);
+        generateSpringCode(doc.parseResult.value, 'model.cdiag', tmpDir);
+        const content = fs.readFileSync(
+            path.join(tmpDir, 'com', 'example', 'controller', 'ItemServiceController.java'), 'utf-8'
+        );
+
+        expect(content).toContain('@GetMapping("/weirdOp")');
+        expect(content).toContain('// TODO: review mapping for operation');
+    });
+
+    test('Controller with no operations generates empty controller', async () => {
+        const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'spring-it3d-'));
+        const doc = await parse(`
+            package com {
+                package example {
+                    @rest path="/empty"
+                    interface EmptyService { }
+                }
+            }
+        `);
+        expect(doc.parseResult.parserErrors).toHaveLength(0);
+        generateSpringCode(doc.parseResult.value, 'model.cdiag', tmpDir);
+        const content = fs.readFileSync(
+            path.join(tmpDir, 'com', 'example', 'controller', 'EmptyServiceController.java'), 'utf-8'
+        );
+
+        expect(content).toContain('@RestController');
+        expect(content).toContain('@RequestMapping("/empty")');
+        expect(content).toContain('public class EmptyServiceController');
+        // No methods
+        expect(content).not.toContain('@GetMapping');
+        expect(content).not.toContain('@PostMapping');
+    });
+});
+
+// ---------------------------------------------------------------------------
+// Iteration 4 – Bean Validation annotations
+// ---------------------------------------------------------------------------
+describe('Iteration 4 – Bean Validation annotations', () => {
+
+    test('Entity property with [1..1] gets @NotNull', async () => {
+        const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'spring-it4a-'));
+        const doc = await parse(`
+            package com {
+                package example {
+                    primitive String
+                    class Customer {
+                        name : String [1..1]
+                        email : String [0..1]
+                    }
+                }
+            }
+        `);
+        expect(doc.parseResult.parserErrors).toHaveLength(0);
+        generateSpringCode(doc.parseResult.value, 'model.cdiag', tmpDir);
+        const content = fs.readFileSync(
+            path.join(tmpDir, 'com', 'example', 'domain', 'Customer.java'), 'utf-8'
+        );
+        expect(content).toContain('@NotNull');
+        expect(content).toContain('import jakarta.validation.constraints.NotNull;');
+        // email is optional, no @NotNull
+        const notNullMatches = content.match(/@NotNull/g) ?? [];
+        expect(notNullMatches.length).toBe(1);
+    });
+
+    test('DTO property with [1..1] gets @NotNull on record component', async () => {
+        const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'spring-it4b-'));
+        const doc = await parse(`
+            package com {
+                package example {
+                    primitive String
+                    @dto datatype CreateReq {
+                        name : String [1..1]
+                        email : String [0..1]
+                    }
+                }
+            }
+        `);
+        expect(doc.parseResult.parserErrors).toHaveLength(0);
+        generateSpringCode(doc.parseResult.value, 'model.cdiag', tmpDir);
+        const content = fs.readFileSync(
+            path.join(tmpDir, 'com', 'example', 'dto', 'CreateReq.java'), 'utf-8'
+        );
+        expect(content).toContain('@NotNull String name');
+        expect(content).not.toContain('@NotNull String email');
+    });
+
+    test('Embeddable property with [1..1] gets @NotNull', async () => {
+        const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'spring-it4c-'));
+        const doc = await parse(`
+            package com {
+                package example {
+                    primitive String
+                    datatype Address {
+                        street : String [1..1]
+                        city : String [0..1]
+                    }
+                }
+            }
+        `);
+        expect(doc.parseResult.parserErrors).toHaveLength(0);
+        generateSpringCode(doc.parseResult.value, 'model.cdiag', tmpDir);
+        const content = fs.readFileSync(
+            path.join(tmpDir, 'com', 'example', 'domain', 'Address.java'), 'utf-8'
+        );
+        expect(content).toContain('@NotNull');
+        const notNullMatches = content.match(/@NotNull/g) ?? [];
+        expect(notNullMatches.length).toBe(1);
+    });
+
+    test('Controller with @RequestBody gets @Valid', async () => {
+        const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'spring-it4d-'));
+        const doc = await parse(`
+            package com {
+                package example {
+                    primitive String
+                    class Customer { name : String }
+                    @dto datatype CreateReq {
+                        name : String [1..1]
+                    }
+                    @rest path="/customers"
+                    interface CustomerService {
+                        save(request : CreateReq) : Customer {}
+                    }
+                }
+            }
+        `);
+        expect(doc.parseResult.parserErrors).toHaveLength(0);
+        generateSpringCode(doc.parseResult.value, 'model.cdiag', tmpDir);
+        const content = fs.readFileSync(
+            path.join(tmpDir, 'com', 'example', 'controller', 'CustomerServiceController.java'), 'utf-8'
+        );
+        expect(content).toContain('@RequestBody @Valid');
+        expect(content).toContain('import jakarta.validation.Valid;');
+    });
+});
+
+// ---------------------------------------------------------------------------
+// Item 5 – OpenAPI/SpringDoc annotations
+// ---------------------------------------------------------------------------
+describe('Item 5 – OpenAPI/SpringDoc annotations', () => {
+
+    test('Controller gets @Tag and @Operation with human-readable summary', async () => {
+        const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'spring-it5a-'));
+        const doc = await parse(`
+            package com {
+                package example {
+                    primitive Long
+                    primitive String
+                    class Customer { name : String }
+                    @rest path="/customers"
+                    interface CustomerService {
+                        findAll() : String [0..-1] {}
+                        findById(id : Long) : String {}
+                    }
+                }
+            }
+        `);
+        expect(doc.parseResult.parserErrors).toHaveLength(0);
+        generateSpringCode(doc.parseResult.value, 'model.cdiag', tmpDir);
+        const content = fs.readFileSync(
+            path.join(tmpDir, 'com', 'example', 'controller', 'CustomerServiceController.java'), 'utf-8'
+        );
+
+        expect(content).toContain('@Tag(name = "/customers")');
+        expect(content).toContain('@Operation(summary = "Find All")');
+        expect(content).toContain('@Operation(summary = "Find By Id")');
+        expect(content).toContain('import io.swagger.v3.oas.annotations.Operation;');
+        expect(content).toContain('import io.swagger.v3.oas.annotations.tags.Tag;');
+    });
+
+    test('Controller with spec-annotated operation includes description', async () => {
+        const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'spring-it5b-'));
+        const doc = await parse(`
+            package com {
+                package example {
+                    primitive Long
+                    class Customer { name : String }
+                    @rest path="/customers"
+                    interface CustomerService {
+                        findById(id : Long) : Customer {
+                            spec "Find a customer by their unique identifier"
+                        }
+                    }
+                }
+            }
+        `);
+        expect(doc.parseResult.parserErrors).toHaveLength(0);
+        generateSpringCode(doc.parseResult.value, 'model.cdiag', tmpDir);
+        const content = fs.readFileSync(
+            path.join(tmpDir, 'com', 'example', 'controller', 'CustomerServiceController.java'), 'utf-8'
+        );
+
+        expect(content).toContain('@Operation(summary = "Find By Id", description = "Find a customer by their unique identifier")');
+    });
+});
+
+// ---------------------------------------------------------------------------
+// Item 6 – DTO/Entity mapping
+// ---------------------------------------------------------------------------
+describe('Item 6 – DTO/Entity mapping', () => {
+
+    test('Service with DTO request and entity response generates mapping methods', async () => {
+        const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'spring-it6a-'));
+        const doc = await parse(`
+            package com {
+                package example {
+                    primitive Long
+                    primitive String
+                    class Customer {
+                        name : String
+                        email : String
+                    }
+                    @dto datatype CreateCustomerRequest {
+                        name : String
+                        email : String
+                    }
+                    @rest path="/customers"
+                    interface CustomerService {
+                        createCustomer(request : CreateCustomerRequest) : Customer {}
+                    }
+                }
+            }
+        `);
+        expect(doc.parseResult.parserErrors).toHaveLength(0);
+        generateSpringCode(doc.parseResult.value, 'model.cdiag', tmpDir);
+        const content = fs.readFileSync(
+            path.join(tmpDir, 'com', 'example', 'service', 'CustomerServiceImpl.java'), 'utf-8'
+        );
+
+        expect(content).toContain('private Customer toEntity(CreateCustomerRequest request)');
+        expect(content).toContain('Customer customer = new Customer();');
+        expect(content).toContain('customer.setName(request.name());');
+        expect(content).toContain('customer.setEmail(request.email());');
+        expect(content).toContain('return customer;');
+
+        expect(content).toContain('private CreateCustomerRequest toDto(Customer customer)');
+        expect(content).toContain('return new CreateCustomerRequest(');
+        expect(content).toContain('customer.getName()');
+        expect(content).toContain('import com.example.dto.CreateCustomerRequest;');
+    });
+
+    test('Service with no DTO/entity pairs generates no mapping methods', async () => {
+        const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'spring-it6b-'));
+        const doc = await parse(`
+            package com {
+                package example {
+                    primitive Long
+                    primitive String
+                    class Customer { name : String }
+                    interface CustomerService {
+                        findById(id : Long) : String {}
+                    }
+                }
+            }
+        `);
+        expect(doc.parseResult.parserErrors).toHaveLength(0);
+        generateSpringCode(doc.parseResult.value, 'model.cdiag', tmpDir);
+        const content = fs.readFileSync(
+            path.join(tmpDir, 'com', 'example', 'service', 'CustomerServiceImpl.java'), 'utf-8'
+        );
+
+        expect(content).not.toContain('toEntity');
+        expect(content).not.toContain('toDto');
+    });
+});
+
+// ---------------------------------------------------------------------------
+// Item 7 – Spring Security scaffolding
+// ---------------------------------------------------------------------------
+describe('Item 7 – Spring Security scaffolding', () => {
+
+    test('Controller method with preAuthorize gets @PreAuthorize', async () => {
+        const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'spring-it7a-'));
+        const doc = await parse(`
+            package com {
+                package example {
+                    primitive String
+                    class Customer { name : String }
+                    @rest path="/customers"
+                    interface CustomerService {
+                        findAll() : String [0..-1] {
+                            preAuthorize "hasRole('ADMIN')"
+                        }
+                    }
+                }
+            }
+        `);
+        expect(doc.parseResult.parserErrors).toHaveLength(0);
+        generateSpringCode(doc.parseResult.value, 'model.cdiag', tmpDir);
+        const content = fs.readFileSync(
+            path.join(tmpDir, 'com', 'example', 'controller', 'CustomerServiceController.java'), 'utf-8'
+        );
+        expect(content).toContain("@PreAuthorize(hasRole('ADMIN'))");
+        expect(content).toContain('import org.springframework.security.access.prepost.PreAuthorize;');
+    });
+
+    test('Service method with preAuthorize gets @PreAuthorize', async () => {
+        const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'spring-it7b-'));
+        const doc = await parse(`
+            package com {
+                package example {
+                    primitive String
+                    class Customer { name : String }
+                    interface CustomerService {
+                        findAll() : String [0..-1] {
+                            preAuthorize "hasRole('ADMIN')"
+                        }
+                    }
+                }
+            }
+        `);
+        expect(doc.parseResult.parserErrors).toHaveLength(0);
+        generateSpringCode(doc.parseResult.value, 'model.cdiag', tmpDir);
+        const content = fs.readFileSync(
+            path.join(tmpDir, 'com', 'example', 'service', 'CustomerServiceImpl.java'), 'utf-8'
+        );
+        expect(content).toContain("@PreAuthorize(hasRole('ADMIN'))");
+    });
+
+    test('Model with preAuthorize generates SecurityConfig', async () => {
+        const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'spring-it7c-'));
+        const doc = await parse(`
+            package com {
+                package example {
+                    primitive String
+                    class Customer { name : String }
+                    interface CustomerService {
+                        findAll() : String [0..-1] {
+                            preAuthorize "hasRole('ADMIN')"
+                        }
+                    }
+                }
+            }
+        `);
+        expect(doc.parseResult.parserErrors).toHaveLength(0);
+        generateSpringCode(doc.parseResult.value, 'model.cdiag', tmpDir);
+        const configFile = path.join(tmpDir, 'com', 'config', 'SecurityConfig.java');
+        expect(fs.existsSync(configFile)).toBe(true);
+        const content = fs.readFileSync(configFile, 'utf-8');
+        expect(content).toContain('@EnableWebSecurity');
+        expect(content).toContain('@EnableMethodSecurity');
+        expect(content).toContain('SecurityFilterChain');
+    });
+
+    test('Model without preAuthorize does not generate SecurityConfig', async () => {
+        const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'spring-it7d-'));
+        const doc = await parse(`
+            package com {
+                package example {
+                    primitive String
+                    class Customer { name : String }
+                    interface CustomerService {
+                        findAll() : String [0..-1] {}
+                    }
+                }
+            }
+        `);
+        expect(doc.parseResult.parserErrors).toHaveLength(0);
+        generateSpringCode(doc.parseResult.value, 'model.cdiag', tmpDir);
+        const configFile = path.join(tmpDir, 'com', 'config', 'SecurityConfig.java');
+        expect(fs.existsSync(configFile)).toBe(false);
     });
 });

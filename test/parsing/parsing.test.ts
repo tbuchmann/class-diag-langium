@@ -376,6 +376,133 @@ describe('Stereotype parsing', () => {
     });
 });
 
+// ---------------------------------------------------------------------------
+// Iteration 1 – @rest annotation parsing
+// ---------------------------------------------------------------------------
+describe('REST annotation parsing', () => {
+
+    test('@rest with path on interface is parsed correctly', async () => {
+        const doc = await parse(`
+            package test {
+                primitive String
+                @rest path="/customers"
+                interface CustomerService {
+                    findAll() : String {}
+                }
+            }
+        `);
+        expect(doc.parseResult.parserErrors).toHaveLength(0);
+        const iface = doc.parseResult.value.packages[0].types[1] as any;
+        expect(iface.restAnnotation).toBeDefined();
+        expect(iface.restAnnotation.path).toBe('/customers');
+    });
+
+    test('@rest without path on interface is parsed correctly', async () => {
+        const doc = await parse(`
+            package test {
+                @rest
+                interface CustomerService {
+                    findAll() : String {}
+                }
+            }
+        `);
+        expect(doc.parseResult.parserErrors).toHaveLength(0);
+        const iface = doc.parseResult.value.packages[0].types[0] as any;
+        expect(iface.restAnnotation).toBeDefined();
+        expect(iface.restAnnotation.path).toBeUndefined();
+    });
+
+    test('@rest with path on class is parsed correctly', async () => {
+        const doc = await parse(`
+            package test {
+                primitive String
+                @rest path="/api"
+                class CustomerResource {
+                    findAll() : String {}
+                }
+            }
+        `);
+        expect(doc.parseResult.parserErrors).toHaveLength(0);
+        const clz = doc.parseResult.value.packages[0].types[1] as any;
+        expect(clz.restAnnotation).toBeDefined();
+        expect(clz.restAnnotation.path).toBe('/api');
+    });
+
+    test('class without @rest has undefined restAnnotation', async () => {
+        const doc = await parse(`
+            package test {
+                class Customer { }
+            }
+        `);
+        expect(doc.parseResult.parserErrors).toHaveLength(0);
+        const clz = doc.parseResult.value.packages[0].types[0] as any;
+        expect(clz.restAnnotation).toBeUndefined();
+    });
+
+    test('interface without @rest has undefined restAnnotation', async () => {
+        const doc = await parse(`
+            package test {
+                interface CustomerService { }
+            }
+        `);
+        expect(doc.parseResult.parserErrors).toHaveLength(0);
+        const iface = doc.parseResult.value.packages[0].types[0] as any;
+        expect(iface.restAnnotation).toBeUndefined();
+    });
+
+    test('@rest with stereotype on class is parsed correctly', async () => {
+        const doc = await parse(`
+            package test {
+                abstract @entity @rest path="/base"
+                class BaseEntity { }
+            }
+        `);
+        expect(doc.parseResult.parserErrors).toHaveLength(0);
+        const clz = doc.parseResult.value.packages[0].types[0] as any;
+        expect(clz.stereotype).toBe('@entity');
+        expect(clz.restAnnotation).toBeDefined();
+        expect(clz.restAnnotation.path).toBe('/base');
+    });
+});
+
+// ---------------------------------------------------------------------------
+// Item 7 – preAuthorize parsing
+// ---------------------------------------------------------------------------
+describe('preAuthorize parsing', () => {
+
+    test('operation with preAuthorize is parsed correctly', async () => {
+        const doc = await parse(`
+            package test {
+                primitive String
+                interface Service {
+                    find() : String {
+                        preAuthorize "hasRole('ADMIN')"
+                    }
+                }
+            }
+        `);
+        expect(doc.parseResult.parserErrors).toHaveLength(0);
+        const iface = doc.parseResult.value.packages[0].types[1] as any;
+        const op = iface.operations[0];
+        expect(op.preAuthorize).toBe("hasRole('ADMIN')");
+    });
+
+    test('operation without preAuthorize has undefined', async () => {
+        const doc = await parse(`
+            package test {
+                primitive String
+                interface Service {
+                    find() : String {}
+                }
+            }
+        `);
+        expect(doc.parseResult.parserErrors).toHaveLength(0);
+        const iface = doc.parseResult.value.packages[0].types[1] as any;
+        const op = iface.operations[0];
+        expect(op.preAuthorize).toBeUndefined();
+    });
+});
+
 function checkDocumentValid(document: LangiumDocument): string | undefined {
     return document.parseResult.parserErrors.length && s`
         Parser errors:

@@ -15,6 +15,8 @@ import { expandToNode, toString } from 'langium/generate';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { extractDestinationAndName } from './cli-util.js';
+import { generateService } from './generatorService.js';
+import { generateController } from './generatorController.js';
 
 // ---------------------------------------------------------------------------
 // Type mapping: model primitive names → Java types used in Spring/JPA code
@@ -57,11 +59,28 @@ export function toSnakeCase(name: string): string {
 }
 
 /**
+ * Module-level override for the base Java package.
+ * When set, replaces the DSL-derived package name in all generated output.
+ */
+let basePackageOverride: string | undefined;
+
+export function setBasePackage(pkg: string | undefined): void {
+    basePackageOverride = pkg;
+}
+
+export function getBasePackage(): string | undefined {
+    return basePackageOverride;
+}
+
+/**
  * Returns the fully qualified package name using the given separator.
  * Mirrors `getQualifiedName` from generator.ts.
  * Used from iteration 1.2 onwards.
  */
 export function getQualifiedName(pkg: Package, sep: string): string {
+    if (basePackageOverride) {
+        return basePackageOverride.replace(/\./g, sep);
+    }
     const names: string[] = [];
     let current: Package | undefined = pkg;
     while (current !== undefined) {
@@ -217,11 +236,13 @@ export function generateEmbeddable(
     const qualifiedPkg = getQualifiedName(pkg, '.');
     const props = (type.properties ?? []) as Property[];
     const hasMulti = props.some(p => p.upper !== undefined && p.upper !== 1);
+    const hasNotNull = props.some(p => p.lower !== undefined && p.lower >= 1);
 
-    const fields = props.map(p =>
-        `@Column(name = "${toSnakeCase(p.name)}")
-    private ${printSpringType(p)} ${p.name};`,
-    ).join('\n    ');
+    const fields = props.map(p => {
+        const notNull = p.lower !== undefined && p.lower >= 1 ? '\n    @NotNull' : '';
+        return `@Column(name = "${toSnakeCase(p.name)}")${notNull}
+    private ${printSpringType(p)} ${p.name};`;
+    }).join('\n    ');
 
     const accessors = props.map(p =>
         `${genGetter(p)}\n    ${genSetter(p)}`,
@@ -233,6 +254,7 @@ export function generateEmbeddable(
         import jakarta.persistence.Column;
         import jakarta.persistence.Embeddable;
         ${hasMulti ? 'import java.util.List;' : ''}
+        ${hasNotNull ? 'import jakarta.validation.constraints.NotNull;' : ''}
 
         @Embeddable
         public class ${type.name} {
@@ -383,6 +405,7 @@ export function generateJpaEntity(
         ['LocalDate', 'LocalDateTime'].includes(springTypeMap.get(p.type?.ref?.name ?? '') ?? ''),
     );
     const hasJsonIgnore = assocFields.some(f => f.jsonIgnore);
+    const hasNotNull = ownProps.some(p => p.lower !== undefined && p.lower >= 1);
 
     // ---------- Structural strings -------------------------------------------
     const superClass     = clz.superClasses?.[0]?.ref;
@@ -410,16 +433,17 @@ export function generateJpaEntity(
         : '';
 
     const propFields = ownProps.map(p => {
+        const notNull = p.lower !== undefined && p.lower >= 1 ? '    @NotNull\n' : '';
         if (p.name === 'id') {
             return '    @Id\n    @GeneratedValue(strategy = GenerationType.IDENTITY)\n    private Long id;';
         }
         switch (p.type?.ref?.$type) {
             case 'DataType':
-                return `    @Embedded\n    private ${printSpringType(p)} ${p.name};`;
+                return `${notNull}    @Embedded\n    private ${printSpringType(p)} ${p.name};`;
             case 'Enumeration':
-                return `    @Enumerated(EnumType.STRING)\n    @Column(name = "${toSnakeCase(p.name)}")\n    private ${printSpringType(p)} ${p.name};`;
+                return `${notNull}    @Enumerated(EnumType.STRING)\n    @Column(name = "${toSnakeCase(p.name)}")\n    private ${printSpringType(p)} ${p.name};`;
             default: // PrimitiveType
-                return `    @Column(name = "${toSnakeCase(p.name)}")\n    private ${printSpringType(p)} ${p.name};`;
+                return `${notNull}    @Column(name = "${toSnakeCase(p.name)}")\n    private ${printSpringType(p)} ${p.name};`;
         }
     });
 
@@ -467,6 +491,7 @@ export function generateJpaEntity(
         lines.push('import java.time.LocalDateTime;');
     }
     if (hasJsonIgnore) lines.push('import com.fasterxml.jackson.annotation.JsonIgnore;');
+    if (hasNotNull) lines.push('import jakarta.validation.constraints.NotNull;');
     lines.push('');
     lines.push(classAnnotation);
     lines.push(`public ${clz.abstract ? 'abstract ' : ''}class ${clz.name}${extendsClause} {`);
@@ -583,8 +608,12 @@ export function generateDto(
         const mapped = springTypeMap.get(p.type?.ref?.name ?? '');
         return mapped === 'LocalDate' || mapped === 'LocalDateTime';
     });
+    const hasNotNull = props.some(p => p.lower !== undefined && p.lower >= 1);
 
-    const params = props.map(p => `${printSpringType(p)} ${p.name}`).join(', ');
+    const params = props.map(p => {
+        const notNull = p.lower !== undefined && p.lower >= 1 ? '@NotNull ' : '';
+        return `${notNull}${printSpringType(p)} ${p.name}`;
+    }).join(', ');
 
     const lines: string[] = [];
     lines.push(`package ${qualifiedPkg}.dto;`);
@@ -594,7 +623,8 @@ export function generateDto(
         lines.push('import java.time.LocalDate;');
         lines.push('import java.time.LocalDateTime;');
     }
-    if (hasMulti || hasDate) lines.push('');
+    if (hasNotNull) lines.push('import jakarta.validation.constraints.NotNull;');
+    if (hasMulti || hasDate || hasNotNull) lines.push('');
     lines.push(`public record ${type.name}(${params}) {}`);
     lines.push('');
 
@@ -665,6 +695,55 @@ export function generateServiceImpl(
 }
 
 // ---------------------------------------------------------------------------
+// SecurityConfig generator
+// ---------------------------------------------------------------------------
+
+export function generateSecurityConfig(
+    model: Model,
+    filePath: string,
+    destination: string | undefined,
+): string {
+    const rootPkg = model.packages[0];
+    if (!rootPkg) return '';
+    const qualifiedPkg = getQualifiedName(rootPkg, '.');
+    const data = extractDestinationAndName(filePath, `${destination}/${qualifiedPkg.replace(/\./g, '/')}/config`);
+    const generatedFilePath = path.join(data.destination, 'SecurityConfig.java');
+
+    const fileNode = expandToNode`
+        package ${qualifiedPkg}.config;
+
+        import org.springframework.context.annotation.Bean;
+        import org.springframework.context.annotation.Configuration;
+        import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
+        import org.springframework.security.config.annotation.web.builders.HttpSecurity;
+        import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
+        import org.springframework.security.web.SecurityFilterChain;
+
+        @Configuration
+        @EnableWebSecurity
+        @EnableMethodSecurity
+        public class SecurityConfig {
+
+            @Bean
+            public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
+                http
+                    .authorizeHttpRequests(auth -> auth
+                        .anyRequest().authenticated()
+                    )
+                    .csrf(csrf -> csrf.disable());
+                return http.build();
+            }
+        }
+    `.appendNewLineIfNotEmpty();
+
+    if (!fs.existsSync(data.destination)) {
+        fs.mkdirSync(data.destination, { recursive: true });
+    }
+    fs.writeFileSync(generatedFilePath, toString(fileNode));
+    return generatedFilePath;
+}
+
+// ---------------------------------------------------------------------------
 // Entry point
 // ---------------------------------------------------------------------------
 
@@ -675,7 +754,9 @@ export function generateSpringCode(
     model: Model,
     filePath: string,
     destination: string | undefined,
+    basePackage?: string,
 ): string {
+    setBasePackage(basePackage);
     const allTypes = collectAllTypes(model);
 
     allTypes.forEach(type => {
@@ -713,10 +794,28 @@ export function generateSpringCode(
         if (type.$type === 'Interface') {
             const iface = type as Interface;
             if ((iface.operations ?? []).length > 0) {
-                generateServiceImpl(iface, filePath, destination);
+                generateService(iface, filePath, destination);
+            }
+        }
+        // @rest-annotated types: generate REST controllers
+        if ((type as any).restAnnotation) {
+            if (type.$type === 'Interface' || type.$type === 'Class') {
+                generateController(type as Interface | Class, model, filePath, destination);
             }
         }
     });
+
+    // Generate SecurityConfig if any operation has preAuthorize
+    const hasSecurity = allTypes.some(t => {
+        if (t.$type === 'Interface' || t.$type === 'Class') {
+            const ops = (t as any).operations ?? [];
+            return ops.some((o: any) => o.preAuthorize);
+        }
+        return false;
+    });
+    if (hasSecurity) {
+        generateSecurityConfig(model, filePath, destination);
+    }
 
     return destination ?? '';
 }

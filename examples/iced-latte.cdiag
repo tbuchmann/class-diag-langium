@@ -1,0 +1,741 @@
+// ============================================================================
+// Iced-Latte — Coffee Marketplace Backend
+// ============================================================================
+// This model describes the core domain of a production-grade Spring Boot
+// coffee marketplace. It covers users, products, shopping cart, orders,
+// payments, reviews, favorites, file storage, support chat, and security.
+// ============================================================================
+//
+// Note: All types are in a single package because the DSL's scoping
+// mechanism resolves references within the same package only.
+// ============================================================================
+
+package icedlatte {
+
+    // ------------------------------------------------------------------
+    // Primitive types
+    // ------------------------------------------------------------------
+    primitive String
+    primitive Long
+    primitive Integer
+    primitive Boolean
+    primitive Decimal
+    primitive Date
+    primitive DateTime
+
+    // ------------------------------------------------------------------
+    // Enumerations
+    // ------------------------------------------------------------------
+    enum Authority {
+        ADMIN, USER
+    }
+
+    enum UserAvatarUploadStatus {
+        PENDING_UPLOAD, UPLOADED, PROCESSING, READY, FAILED, EXPIRED, SUPERSEDED
+    }
+
+    enum PaymentStatus {
+        CREATED, STRIPE_SESSION_CREATED, AWAITING_ASYNC_CONFIRMATION,
+        PAID, FAILED, EXPIRED, REFUNDED, RECONCILIATION_FAILED
+    }
+
+    enum PaymentProvider {
+        STRIPE
+    }
+
+    enum WebhookEventStatus {
+        PROCESSING, PROCESSED, RETRYABLE_FAILED
+    }
+
+    enum OrderStatus {
+        CREATED, PENDING_PAYMENT, PAID, PROCESSING, SHIPPED,
+        DELIVERED, CANCELLED, REFUND_REQUESTED, REFUNDED,
+        PAYMENT_FAILED, PAYMENT_EXPIRED
+    }
+
+    enum SupportMessageSenderType {
+        CUSTOMER, OWNER, SYSTEM
+    }
+
+    enum SupportMessageDeliveryStatus {
+        PENDING, SENT, FAILED
+    }
+
+    enum OAuthProvider {
+        GOOGLE, GITHUB
+    }
+
+    enum TokenPurpose {
+        EMAIL_VERIFICATION, PASSWORD_RESET
+    }
+
+    enum AvatarUploadMode {
+        BACKEND, PRESIGNED
+    }
+
+    // ------------------------------------------------------------------
+    // DTOs (data transfer records)
+    // ------------------------------------------------------------------
+    @dto datatype ProductSnapshot {
+        id : String
+        name : String
+        description : String
+        price : Decimal
+        quantity : Integer
+        active : Boolean
+        averageRating : Decimal
+        reviewsCount : Integer
+        brandName : String
+        sellerName : String
+        weight : Integer
+    }
+
+    @dto datatype CartSnapshot {
+        id : String
+        userId : String
+        itemsQuantity : Integer
+        itemsTotalPrice : Decimal
+        productsQuantity : Integer
+    }
+
+    @dto datatype CartItemSnapshot {
+        id : String
+        productQuantity : Integer
+    }
+
+    @dto datatype AddCartItemRequest {
+        productId : String [1..1]
+        productQuantity : Integer [1..1]
+    }
+
+    @dto datatype CheckoutOrderRequest {
+        recipientName : String [1..1]
+        recipientSurname : String [1..1]
+        recipientPhone : String
+    }
+
+    @dto datatype OrderAddressRequest {
+        country : String [1..1]
+        city : String [1..1]
+        line : String [1..1]
+        postcode : String [1..1]
+    }
+
+    @dto datatype UserLookupSnapshot {
+        id : String
+        firstName : String
+        lastName : String
+        email : String
+    }
+
+    @dto datatype CurrentUserSnapshot {
+        id : String
+        email : String
+        displayName : String
+    }
+
+    @dto datatype FileMetadataDto {
+        relatedObjectId : String
+        bucketName : String
+        fileName : String
+    }
+
+    @dto datatype StripeSessionResult {
+        sessionId : String
+        checkoutUrl : String
+    }
+
+    // ------------------------------------------------------------------
+    // Base entity for auditing
+    // ------------------------------------------------------------------
+    abstract @mappedsuperclass class AuditableEntity {
+        createdAt : DateTime [1..1]
+        updatedAt : DateTime
+        createdBy : String
+        updatedBy : String
+    }
+
+    // ------------------------------------------------------------------
+    // User domain entities
+    // ------------------------------------------------------------------
+    class UserEntity extends AuditableEntity {
+        id : String [1..1]
+        firstName : String [1..1]
+        lastName : String [1..1]
+        birthDate : Date
+        phoneNumber : String
+        email : String [1..1]
+        password : String [1..1]
+        stripeCustomerToken : String
+        accountNonExpired : Boolean [1..1]
+        accountNonLocked : Boolean [1..1]
+        credentialsNonExpired : Boolean [1..1]
+        enabled : Boolean [1..1]
+        oauthUser : Boolean [1..1]
+    }
+
+    class Address {
+        addressId : String [1..1]
+        country : String [1..1]
+        city : String [1..1]
+        line : String [1..1]
+        postcode : String [1..1]
+    }
+
+    class UserGrantedAuthority {
+        userAuthorityId : String [1..1]
+        authority : Authority [1..1]
+    }
+
+    class DeliveryAddressEntity {
+        id : String [1..1]
+        label : String [1..1]
+        line : String [1..1]
+        city : String [1..1]
+        country : String [1..1]
+        postcode : String [1..1]
+        isDefault : Boolean [1..1]
+    }
+
+    class UserAvatarUpload {
+        id : String [1..1]
+        userId : String [1..1]
+        status : UserAvatarUploadStatus [1..1]
+        originalBucket : String
+        originalKey : String
+        processedBucket : String
+        processedKey : String
+        contentType : String
+        originalSizeBytes : Long
+        processedSizeBytes : Long
+        imageWidth : Integer
+        imageHeight : Integer
+        sha256 : String
+        clientIdempotencyKey : String
+        active : Boolean [1..1]
+        createdAt : DateTime
+        expiresAt : DateTime
+    }
+
+    assoc UserAddress {
+        user : UserEntity
+        address : Address [0..1] composite
+    }
+
+    assoc UserAuthorities {
+        user : UserEntity
+        authorities : UserGrantedAuthority [0..-1] composite
+    }
+
+    assoc UserDeliveryAddresses {
+        user : UserEntity
+        deliveryAddresses : DeliveryAddressEntity [0..-1] composite
+    }
+
+    // ------------------------------------------------------------------
+    // Product catalog entities
+    // ------------------------------------------------------------------
+    class ProductInfo extends AuditableEntity {
+        id : String [1..1]
+        version : Long [1..1]
+        name : String [1..1]
+        description : String [1..1]
+        price : Decimal [1..1]
+        quantity : Integer [1..1]
+        active : Boolean [1..1]
+        averageRating : Decimal
+        reviewsCount : Integer
+        brandName : String [1..1]
+        sellerName : String [1..1]
+        originCountry : String [1..1]
+        weight : Integer [1..1]
+        length : Integer [1..1]
+        width : Integer [1..1]
+        height : Integer [1..1]
+        soldProductsCount : Integer [1..1]
+        discount : Integer [1..1]
+        dateAdded : DateTime
+        popularityScore : Integer [1..1]
+        aiSummary : String
+    }
+
+    class ProductImage {
+        id : String [1..1]
+        productId : String [1..1]
+        url : String [1..1]
+        position : Integer [1..1]
+    }
+
+    // ------------------------------------------------------------------
+    // Shopping cart entities
+    // ------------------------------------------------------------------
+    class ShoppingCart {
+        id : String [1..1]
+        userId : String [1..1]
+        createdAt : DateTime [1..1]
+        closedAt : DateTime
+    }
+
+    class ShoppingCartItem {
+        id : String [1..1]
+        version : Integer [1..1]
+        productId : String [1..1]
+        productQuantity : Integer [1..1]
+    }
+
+    assoc CartItems {
+        cart : ShoppingCart
+        items : ShoppingCartItem [0..-1] composite
+    }
+
+    // ------------------------------------------------------------------
+    // Order entities
+    // ------------------------------------------------------------------
+    class Order extends AuditableEntity {
+        id : String [1..1]
+        userId : String [1..1]
+        sessionId : String [1..1]
+        status : OrderStatus [1..1]
+        version : Integer [1..1]
+        idempotencyKey : String
+        recipientName : String [1..1]
+        recipientSurname : String [1..1]
+        recipientPhone : String
+        itemsQuantity : Integer
+        itemsTotalPrice : Decimal
+        cancellationDeadline : DateTime
+        stripePaymentIntentId : String
+        refundReason : String
+        refundedAt : DateTime
+    }
+
+    class OrderItem {
+        id : String [1..1]
+        orderId : String [1..1]
+        productId : String
+        productPrice : Decimal
+        productName : String
+        productsQuantity : Integer [1..1]
+    }
+
+    class OrderAddress {
+        addressId : String [1..1]
+        country : String [1..1]
+        city : String [1..1]
+        line : String [1..1]
+        postcode : String [1..1]
+    }
+
+    class OrderStatusHistory {
+        id : String [1..1]
+        orderId : String [1..1]
+        oldStatus : OrderStatus
+        newStatus : OrderStatus [1..1]
+        changedBy : String
+        reason : String
+        changedAt : DateTime [1..1]
+    }
+
+    assoc OrderItems {
+        order : Order
+        items : OrderItem [0..-1] composite
+    }
+
+    assoc OrderShippingAddress {
+        order : Order
+        address : OrderAddress composite
+    }
+
+    assoc OrderStatusHistoryEntries {
+        order : Order
+        statusHistory : OrderStatusHistory [0..-1] composite
+    }
+
+    // ------------------------------------------------------------------
+    // Payment entities
+    // ------------------------------------------------------------------
+    class Payment extends AuditableEntity {
+        id : String [1..1]
+        orderId : String [1..1]
+        userId : String [1..1]
+        provider : PaymentProvider [1..1]
+        providerSessionId : String
+        providerPaymentIntentId : String
+        status : PaymentStatus [1..1]
+        amountMinor : Long [1..1]
+        currency : String [1..1]
+        rawEventId : String
+        latestEventType : String
+        checkoutIdempotencyKey : String
+    }
+
+    class StripeWebhookEvent {
+        stripeEventId : String [1..1]
+        eventType : String [1..1]
+        status : WebhookEventStatus [1..1]
+        receivedAt : DateTime [1..1]
+        processedAt : DateTime
+        failureReason : String
+    }
+
+    // ------------------------------------------------------------------
+    // Review entities
+    // ------------------------------------------------------------------
+    class ProductReview {
+        id : String [1..1]
+        userId : String [1..1]
+        productId : String
+        createdAt : DateTime
+        text : String [1..1]
+        productRating : Integer [1..1]
+        likesCount : Integer [1..1]
+        dislikesCount : Integer [1..1]
+    }
+
+    class ProductReviewLike {
+        id : String [1..1]
+        productReviewId : String [1..1]
+        productId : String [1..1]
+        userId : String [1..1]
+        isLike : Boolean [1..1]
+    }
+
+    // ------------------------------------------------------------------
+    // Favorites entities
+    // ------------------------------------------------------------------
+    class FavoriteListEntity {
+        id : String [1..1]
+        userId : String [1..1]
+        updatedAt : DateTime
+    }
+
+    class FavoriteItemEntity {
+        id : String [1..1]
+        version : Integer [1..1]
+        productId : String [1..1]
+    }
+
+    assoc FavoriteItems {
+        favoriteList : FavoriteListEntity
+        items : FavoriteItemEntity [0..-1] composite
+    }
+
+    // ------------------------------------------------------------------
+    // Security entities
+    // ------------------------------------------------------------------
+    class AuthSessionEntity {
+        id : String [1..1]
+        userId : String [1..1]
+        refreshTokenHash : String [1..1]
+        previousTokenHash : String
+        createdAt : DateTime
+        expiresAt : DateTime
+        lastUsedAt : DateTime
+        revokedAt : DateTime
+        userAgent : String
+        ipAddress : String
+        compromised : Boolean [1..1]
+    }
+
+    class LoginAttemptEntity {
+        id : String [1..1]
+        userEmail : String [1..1]
+        attempts : Integer [1..1]
+        expirationDatetime : DateTime
+        isUserLocked : Boolean [1..1]
+        lastModified : DateTime
+    }
+
+    class OAuthIdentityEntity extends AuditableEntity {
+        id : String [1..1]
+        userId : String [1..1]
+        provider : OAuthProvider [1..1]
+        providerSubject : String [1..1]
+        email : String [1..1]
+    }
+
+    // ------------------------------------------------------------------
+    // Support chat entities
+    // ------------------------------------------------------------------
+    class SupportConversationEntity {
+        id : String [1..1]
+        userId : String [1..1]
+        createdAt : DateTime
+        updatedAt : DateTime
+        lastMessageAt : DateTime
+        telegramMessageThreadId : Long
+        telegramFallbackMessageId : Long
+    }
+
+    class SupportMessageEntity {
+        id : String [1..1]
+        conversationId : String [1..1]
+        senderType : SupportMessageSenderType [1..1]
+        senderUserId : String
+        clientMessageId : String
+        body : String [1..1]
+        normalizedBody : String [1..1]
+        deliveryStatus : SupportMessageDeliveryStatus [1..1]
+        operatorInspectionRequired : Boolean [1..1]
+        visibleToCustomer : Boolean [1..1]
+        telegramUpdateId : Long
+        telegramMessageId : Long
+        createdAt : DateTime
+    }
+
+    assoc ConversationMessages {
+        conversation : SupportConversationEntity
+        messages : SupportMessageEntity [0..-1] composite
+    }
+
+    // ------------------------------------------------------------------
+    // File storage entities
+    // ------------------------------------------------------------------
+    class FileMetadata {
+        fileId : String [1..1]
+        relatedObjectId : String
+        bucketName : String [1..1]
+        fileName : String [1..1]
+        createdAt : DateTime
+        updatedAt : DateTime
+    }
+
+    // ------------------------------------------------------------------
+    // REST service interfaces
+    // ------------------------------------------------------------------
+
+    @rest path="/api/v1/users"
+    interface UserProfileService {
+        getUserProfile() : UserLookupSnapshot {
+            spec "Retrieves the authenticated user's profile information"
+        }
+        editUserProfile() : UserLookupSnapshot {
+            spec "Updates the authenticated user's profile fields"
+        }
+        changeUserPassword() {
+            spec "Changes the authenticated user's password after verifying current password"
+        }
+        deleteUserProfile() {
+            spec "Deletes the authenticated user's profile and associated data"
+        }
+    }
+
+    @rest path="/api/v1/users/addresses"
+    interface DeliveryAddressService {
+        getDeliveryAddresses() : String [0..-1] {
+            spec "Retrieves all delivery addresses for the authenticated user"
+        }
+        addDeliveryAddress(request : CheckoutOrderRequest) {
+            spec "Adds a new delivery address for the authenticated user"
+        }
+        updateDeliveryAddress(addressId : String) {
+            spec "Updates an existing delivery address"
+        }
+        deleteDeliveryAddress(addressId : String) {
+            spec "Deletes a delivery address by its ID"
+        }
+        setDefaultDeliveryAddress(addressId : String) {
+            spec "Sets a delivery address as the default for the user"
+        }
+    }
+
+    @rest path="/api/v1/users/avatar"
+    interface UserAvatarService {
+        uploadUserAvatar() {
+            spec "Uploads a new avatar image for the authenticated user"
+        }
+        getUserAvatarLink() : String {
+            spec "Returns the URL to the user's current avatar image"
+        }
+        deleteUserAvatar() {
+            spec "Deletes the user's current avatar"
+        }
+    }
+
+    @rest path="/api/v1/products"
+    interface ProductCatalogService {
+        getProducts() : String [0..-1] {
+            spec "Retrieves a paginated list of products with optional filters"
+        }
+        getAllSellers() : String [0..-1] {
+            spec "Retrieves a list of all distinct seller names"
+        }
+        getAllBrands() : String [0..-1] {
+            spec "Retrieves a list of all distinct brand names"
+        }
+        getProductsByIds() : String [0..-1] {
+            spec "Retrieves products by a list of product IDs"
+        }
+        getProductById(productId : String) : ProductSnapshot {
+            spec "Retrieves a single product by its ID"
+        }
+    }
+
+    @rest path="/api/v1/cart"
+    interface ShoppingCartService {
+        getShoppingCart() : CartSnapshot {
+            spec "Retrieves the current user's shopping cart with all items"
+        }
+        addNewItemToShoppingCart(request : AddCartItemRequest) {
+            spec "Adds a new item to the shopping cart"
+        }
+        updateProductQuantityInShoppingCartItem() {
+            spec "Updates the quantity of a product in a cart item"
+        }
+        deleteItemsFromShoppingCart() {
+            spec "Removes items from the shopping cart"
+        }
+    }
+
+    @rest path="/api/v1/orders"
+    interface OrderService {
+        getOrders() : String [0..-1] {
+            spec "Retrieves all orders for the authenticated user with pagination"
+        }
+        createOrder(request : CheckoutOrderRequest) {
+            spec "Creates a new order from the shopping cart contents"
+        }
+        getOrderById(orderId : String) {
+            spec "Retrieves a single order by its ID"
+        }
+        cancelOrder(orderId : String) {
+            spec "Cancels an order if within the cancellation deadline"
+        }
+        requestRefund(orderId : String) {
+            spec "Requests a refund for a delivered order"
+        }
+        reorder(orderId : String) {
+            spec "Creates a new order based on a previous order's items"
+        }
+        getOrderHistory(orderId : String) : String [0..-1] {
+            spec "Retrieves the status change history for an order"
+        }
+    }
+
+    @rest path="/api/v1/admin/orders"
+    interface AdminOrderService {
+        getAllOrders() : String [0..-1] {
+            spec "Retrieves all orders in the system (admin only)"
+        }
+        updateOrderStatus(orderId : String) {
+            spec "Updates the status of an order (admin only)"
+        }
+    }
+
+    @rest path="/api/v1/payment"
+    interface PaymentService {
+        createCheckout() : StripeSessionResult {
+            spec "Creates a Stripe checkout session for an order"
+        }
+        getCheckoutStatus(orderId : String) {
+            spec "Retrieves the current payment status for a checkout"
+        }
+        processStripeWebhook() {
+            spec "Processes an incoming Stripe webhook event"
+        }
+    }
+
+    @rest path="/api/v1/products"
+    interface ProductReviewService {
+        getProductReviewsAndRatings(productId : String) : String [0..-1] {
+            spec "Retrieves all reviews and rating statistics for a product"
+        }
+        getRatingAndReviewStat(productId : String) {
+            spec "Retrieves aggregated rating statistics for a product"
+        }
+        addNewProductReview(productId : String) {
+            spec "Adds a new review for a product"
+        }
+        deleteProductReview(productId : String, productReviewId : String) {
+            spec "Deletes a product review"
+        }
+        getProductReview(productId : String) {
+            spec "Retrieves the authenticated user's review for a product"
+        }
+        getUserReviews() : String [0..-1] {
+            spec "Retrieves all reviews written by the authenticated user"
+        }
+        addProductReviewLike(productId : String, productReviewId : String) {
+            spec "Adds or removes a like on a product review"
+        }
+    }
+
+    @rest path="/api/v1/favorites"
+    interface FavoriteService {
+        getListOfFavoriteProducts() : String [0..-1] {
+            spec "Retrieves the authenticated user's list of favorite products"
+        }
+        addListOfFavoriteProducts() {
+            spec "Adds products to the user's favorites list"
+        }
+        removeProductFromFavorite(productId : String) {
+            spec "Removes a product from the user's favorites list"
+        }
+    }
+
+    @rest path="/api/v1/auth"
+    interface AuthenticationService {
+        register() {
+            spec "Registers a new user account with email and password"
+        }
+        confirmEmail() {
+            spec "Confirms a user's email address using a verification token"
+        }
+        authenticate() {
+            spec "Authenticates a user with email and password, returns JWT tokens"
+        }
+        refreshToken() {
+            spec "Refreshes an expired access token using a refresh token"
+        }
+        logout() {
+            spec "Revokes the current refresh token"
+        }
+        logoutAll() {
+            spec "Revokes all active sessions for the authenticated user"
+        }
+        getSessions() : String [0..-1] {
+            spec "Retrieves all active sessions for the authenticated user"
+        }
+        revokeSession(sessionId : String) {
+            spec "Revokes a specific session by its ID"
+        }
+        forgotPassword() {
+            spec "Sends a password reset email to the user"
+        }
+        changePassword() {
+            spec "Changes the user's password using a reset token"
+        }
+    }
+
+    @rest path="/api/v1/auth/oauth"
+    interface OAuthService {
+        initiateOAuth(provider : String) {
+            spec "Initiates the OAuth2 login flow for the specified provider"
+        }
+        completeOAuthCallback() {
+            spec "Completes the OAuth2 login flow after provider callback"
+        }
+        completeOAuthTokenHandoff() {
+            spec "Completes OAuth2 authentication via token handoff"
+        }
+    }
+
+    @rest path="/api/v1/support-chat"
+    interface SupportChatService {
+        getSupportChatStatus() {
+            spec "Retrieves the availability status of support chat"
+        }
+        getCurrentSupportChatConversation() {
+            spec "Retrieves the current support conversation for the user"
+        }
+        createSupportChatWebSocketTicket() {
+            spec "Creates a WebSocket connection ticket for real-time chat"
+        }
+        getSupportChatMessages(conversationId : String) : String [0..-1] {
+            spec "Retrieves messages for a support conversation with pagination"
+        }
+        sendSupportChatMessage(conversationId : String) {
+            spec "Sends a new message in a support conversation"
+        }
+    }
+}

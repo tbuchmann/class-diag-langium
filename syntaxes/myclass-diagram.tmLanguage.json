@@ -10,7 +10,7 @@
     },
     {
       "name": "keyword.control.class-diagram",
-      "match": "\\b(abstract|assoc|class|composite|datatype|enum|extends|impl|implements|interface|none|package|primitive|private|protected|public|shared|spec|static|x)\\b"
+      "match": "\\b(abstract|assoc|class|composite|datatype|enum|extends|impl|implements|interface|none|package|path|preAuthorize|primitive|private|protected|public|shared|spec|static|x)\\b|\\B(@rest)\\b"
     },
     {
       "name": "string.quoted.double.class-diagram",

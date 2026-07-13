@@ -9,12 +9,12 @@ export function registerValidationChecks(services: ClassDiagramServices) {
     const registry = services.validation.ValidationRegistry;
     const validator = services.validation.ClassDiagramValidator;
     const checks: ValidationChecks<ClassDiagramAstType> = {
-        Class: [ validator.checkTypeStartsWithCapital, validator.checkNoCycleInClassInheritance, validator.checkDuplicateTypeName, validator.checkImplicitManyToOne ],
-        Interface: [ validator.checkTypeStartsWithCapital, validator.checkNoCycleInInterfaceInheritance, validator.checkDuplicateTypeName],
+        Class: [ validator.checkTypeStartsWithCapital, validator.checkNoCycleInClassInheritance, validator.checkDuplicateTypeName, validator.checkImplicitManyToOne, validator.checkRestPathFormat, validator.checkRestTypeHasOperations ],
+        Interface: [ validator.checkTypeStartsWithCapital, validator.checkNoCycleInInterfaceInheritance, validator.checkDuplicateTypeName, validator.checkRestPathFormat, validator.checkRestTypeHasOperations],
         DataType: [ validator.checkTypeStartsWithCapital, validator.checkDuplicateTypeName, validator.checkDtoPackageConvention ],
         Enumeration: [ validator.checkTypeStartsWithCapital, validator.checkDuplicateTypeName, validator.checkDuplicateEnumerationLiteralName, validator.checkEnumLiteralIsCapital ],
         Property: [ validator.checkPropertyStartsWithLower, validator.checkDuplicatePropertyName ],
-        Operation: [ validator.checkOperationStartsWithLower, validator.checkDuplicateOperationName ],        
+        Operation: [ validator.checkOperationStartsWithLower, validator.checkDuplicateOperationName, validator.checkRestOperationMappable ],        
         Package: [ validator.checkDuplicatePackageName],
     };
     registry.register(checks, validator);
@@ -220,6 +220,41 @@ export class ClassDiagramValidator {
             `DataType '${t.name}' in a '${pkg.name}' package should carry a @dto, @request, or @response stereotype for clarity.`,
             { node: t, property: 'name' },
         );
+    }
+
+    checkRestPathFormat(t: Type, accept: ValidationAcceptor): void {
+        const restAnnotation = (t as { restAnnotation?: { path?: string } }).restAnnotation;
+        if (restAnnotation?.path && !restAnnotation.path.startsWith('/')) {
+            accept('error', `REST path must start with '/'.`, { node: t, property: 'name' });
+        }
+    }
+
+    checkRestTypeHasOperations(t: Type, accept: ValidationAcceptor): void {
+        const restAnnotation = (t as { restAnnotation?: { path?: string } }).restAnnotation;
+        if (!restAnnotation) return;
+        const operations = (t as { operations?: unknown[] }).operations;
+        if (!operations || operations.length === 0) {
+            accept('warning', 'REST controller/interface has no operations.', { node: t, property: 'name' });
+        }
+    }
+
+    checkRestOperationMappable(o: Operation, accept: ValidationAcceptor): void {
+        const container = o.$container as { restAnnotation?: unknown };
+        if (!container.restAnnotation) return;
+        const params = o.params ?? [];
+        const hasReturnType = o.type?.ref !== undefined;
+        const returnTypeIsCollection = o.upper !== undefined && o.upper !== 1;
+        const idParam = params.find(p => p.type?.ref?.name === 'Long' || p.type?.ref?.name === 'Integer' || p.type?.ref?.name === 'String');
+        const dtoParam = params.find(p => p.type?.ref?.$type !== 'PrimitiveType' && p.type?.ref?.$type !== undefined);
+        const isMappable =
+            (params.length === 0 && hasReturnType && returnTypeIsCollection) || // GET /
+            (params.length === 1 && idParam && hasReturnType && !returnTypeIsCollection) || // GET /{id}
+            (params.length === 1 && dtoParam && hasReturnType) || // POST /
+            (params.length === 2 && idParam && dtoParam && hasReturnType) || // PUT /{id}
+            (params.length === 1 && idParam && !hasReturnType); // DELETE /{id}
+        if (!isMappable) {
+            accept('hint', `Operation signature does not match a known REST pattern; generator will fall back to GET /{name}.`, { node: o, property: 'name' });
+        }
     }
 
 }

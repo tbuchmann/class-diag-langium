@@ -22,15 +22,23 @@ export const generateAction = async (fileName: string, opts: GenerateOptions): P
     console.log(chalk.green(`Code generated successfully: ${generatedFilePath}`));
 };
 
+function resolveSpringDestination(projectRoot: string, basePackage: string): string {
+    return path.join(projectRoot, 'src', 'main', 'java', ...basePackage.split('.'));
+}
+
 export const generateSpringAction = async (fileName: string, opts: GenerateOptions): Promise<void> => {
     const services = createClassDiagramServices(NodeFileSystem).ClassDiagram;
     const model = await extractAstNode<Model>(fileName, services);
-    const destination = generateSpringCode(model, fileName, opts.destination);
+    const basePkg = opts.package ?? '';
+    const destination = resolveSpringDestination(opts.projectRoot ?? '.', basePkg);
+    generateSpringCode(model, fileName, destination, basePkg || undefined);
     console.log(chalk.green(`Spring code generated successfully in: ${destination}`));
 };
 
 export type GenerateOptions = {
     destination?: string;
+    projectRoot?: string;
+    package?: string;
 }
 
 export default function(): void {
@@ -49,8 +57,9 @@ export default function(): void {
     program
         .command('generate-spring')
         .argument('<file>', `source file (possible file extensions: ${fileExtensions})`)
-        .option('-d, --destination <dir>', 'destination directory of generating')
-        .description('generates Spring Boot / JPA code (entities, embeddables, enums, repositories)')
+        .requiredOption('-r, --project-root <dir>', 'root directory of the Spring Boot project')
+        .requiredOption('-p, --package <pkg>', 'base Java package (e.g., com.zufar.icedlatte)')
+        .description('generates Spring Boot / JPA code into <projectRoot>/src/main/java/<package>')
         .action(generateSpringAction);
 
     program.parse(process.argv);
