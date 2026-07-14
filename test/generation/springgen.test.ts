@@ -1413,6 +1413,38 @@ describe('Iteration 2 – Richer service generator', () => {
     });
 });
 
+    test('Service infers repository from interface name when no DTOs or entities are referenced', async () => {
+        const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'spring-it2f-'));
+        const doc = await parse(`
+            package com {
+                package example {
+                    primitive String
+                    class Order {
+                        status : String
+                    }
+                    interface AdminOrderService {
+                        getAllOrders() : String [0..-1] {
+                            spec "Retrieves all orders in the system (admin only)"
+                        }
+                        updateOrderStatus(orderId : String) {
+                            spec "Updates the status of an order (admin only)"
+                        }
+                    }
+                }
+            }
+        `);
+        expect(doc.parseResult.parserErrors).toHaveLength(0);
+        generateSpringCode(doc.parseResult.value, 'model.cdiag', tmpDir);
+        const content = fs.readFileSync(
+            path.join(tmpDir, 'com', 'example', 'service', 'AdminOrderServiceImpl.java'), 'utf-8'
+        );
+
+        // Repository should be injected based on interface name "AdminOrderService" → "Order"
+        expect(content).toContain('private final OrderRepository orderRepository;');
+        expect(content).toContain('import com.example.repository.OrderRepository;');
+        expect(content).toContain('import com.example.domain.Order;');
+    });
+
 // ---------------------------------------------------------------------------
 // Iteration 2.8 – E2E-Tests (alle Phase-2-Features kombiniert)
 // ---------------------------------------------------------------------------

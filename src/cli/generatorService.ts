@@ -178,6 +178,51 @@ function inferEntitiesFromDTOs(
 }
 
 /**
+ * Infers entity types from the interface name itself.
+ * E.g. "AdminOrderService" → "Order" → entity "Order"
+ * E.g. "ProductReviewService" → "ProductReview" → entity "ProductReview"
+ */
+function inferEntitiesFromName(
+    iface: Interface,
+    alreadyReferenced: Set<string>,
+): string[] {
+    const model = findRootModel(iface.$container as Package);
+    const allClasses = collectAllClasses(model);
+
+    // Strip common prefixes and suffixes from the interface name
+    const baseName = iface.name
+        .replace(/^(Admin|Base|Default)/, '')
+        .replace(/(Service|Resource|Controller)$/, '');
+
+    if (!baseName) return [];
+
+    const inferred = new Set<string>();
+
+    // Direct match: baseName === entity name
+    const directMatch = allClasses.find(c =>
+        !alreadyReferenced.has(c.name) && !inferred.has(c.name) &&
+        c.name === baseName
+    );
+    if (directMatch) {
+        inferred.add(directMatch.name);
+    }
+
+    // Partial match: entity name contains baseName or vice versa
+    if (inferred.size === 0) {
+        const partialMatch = allClasses.find(c =>
+            !alreadyReferenced.has(c.name) && !inferred.has(c.name) &&
+            (c.name.toLowerCase().includes(baseName.toLowerCase()) ||
+                baseName.toLowerCase().includes(c.name.toLowerCase().replace(/entity$/i, '')))
+        );
+        if (partialMatch) {
+            inferred.add(partialMatch.name);
+        }
+    }
+
+    return Array.from(inferred).sort();
+}
+
+/**
  * Finds the entity type referenced by an operation's parameters or return type.
  * Returns the first matching entity name, or undefined.
  */
@@ -375,8 +420,9 @@ export function generateService(
 
     const operations = (iface.operations ?? []) as Operation[];
     const directEntities = collectReferencedEntities(iface);
-    const inferredEntities = inferEntitiesFromDTOs(iface, new Set(directEntities));
-    const entities = [...directEntities, ...inferredEntities];
+    const inferredFromDTOs = inferEntitiesFromDTOs(iface, new Set(directEntities));
+    const inferredFromName = inferEntitiesFromName(iface, new Set([...directEntities, ...inferredFromDTOs]));
+    const entities = [...directEntities, ...inferredFromDTOs, ...inferredFromName];
     const mappingPairs = collectMappingPairs(iface);
 
     // Build repository field declarations and constructor params

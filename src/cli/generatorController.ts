@@ -137,7 +137,10 @@ function buildControllerSource(target: ControllerTarget, delegateType: string, d
     const hasListReturnType = target.operations.some(op =>
         op.type?.ref && printSpringType(op).startsWith('List<')
     );
-    if (hasCollection || hasListReturnType) {
+    const hasListParamType = target.operations.some(op =>
+        (op.params ?? []).some(p => printSpringType(p).startsWith('List<'))
+    );
+    if (hasCollection || hasListReturnType || hasListParamType) {
         lines.push('import java.util.List;');
     }
 
