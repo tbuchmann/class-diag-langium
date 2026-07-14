@@ -461,9 +461,9 @@ export function generateService(
             body = ` {\n${crudBody}\n    }`;
         } else {
             body = ` {
-        //generated start
+        // generated start
         throw new UnsupportedOperationException("Not yet implemented");
-        //generated end
+        // generated end
     }`;
         }
 
