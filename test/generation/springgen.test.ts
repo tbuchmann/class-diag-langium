@@ -324,6 +324,28 @@ describe('generateJpaEntity', () => {
         expect(content).toContain('@GeneratedValue(strategy = GenerationType.IDENTITY)');
     });
 
+    test('explicit id property of type String is coerced to Long', async () => {
+        const doc = await parse(`
+            package shop {
+                primitive String
+                class Invoice {
+                    id : String
+                }
+            }
+        `);
+        expect(doc.parseResult.parserErrors).toHaveLength(0);
+        const clz = doc.parseResult.value.packages[0].types
+            .find(t => t.$type === 'Class') as Class;
+        const outFile = generateJpaEntity(clz, doc.parseResult.value, 'model.cdiag', tmpDir);
+        const content = fs.readFileSync(outFile, 'utf-8');
+
+        expect(content).toContain('private Long id;');
+        expect(content).toContain('public Long getId() {');
+        expect(content).toContain('public void setId(Long id) {');
+        expect(content).not.toContain('public String getId()');
+        expect(content).not.toContain('public void setId(String');
+    });
+
     test('PrimitiveType property gets @Column with snake_case name', async () => {
         const doc = await parse(`
             package shop {
@@ -1548,7 +1570,7 @@ describe('Iteration 3 – REST controller generator', () => {
         expect(content).toContain('@RestController');
         expect(content).toContain('@RequestMapping("/customers")');
         expect(content).toContain('public class CustomerServiceController');
-        expect(content).toContain('private final CustomerServiceImpl customerServiceImpl;');
+        expect(content).toContain('private final CustomerService customerService;');
         expect(content).toContain('@GetMapping');
         expect(content).toContain('@DeleteMapping("/{id}")');
         expect(content).toContain('ResponseEntity');
@@ -1603,8 +1625,9 @@ describe('Iteration 3 – REST controller generator', () => {
             path.join(tmpDir, 'com', 'example', 'controller', 'ItemServiceController.java'), 'utf-8'
         );
 
-        expect(content).toContain('@GetMapping("/weirdOp")');
-        expect(content).toContain('// TODO: review mapping for operation');
+        expect(content).toContain('@PostMapping');
+        expect(content).toContain('ResponseEntity<Void>');
+        expect(content).toContain('return ResponseEntity.noContent().build()');
     });
 
     test('Controller with no operations generates empty controller', async () => {
@@ -1629,6 +1652,43 @@ describe('Iteration 3 – REST controller generator', () => {
         // No methods
         expect(content).not.toContain('@GetMapping');
         expect(content).not.toContain('@PostMapping');
+    });
+
+    test('Controller imports DTO and Enumeration types from other sub-packages', async () => {
+        const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'spring-it3e-'));
+        const doc = await parse(`
+            package com {
+                package example {
+                    primitive String
+                    enum Status { ACTIVE, INACTIVE }
+                    @dto
+                    datatype CustomerRequest {
+                        name : String
+                    }
+                    class Customer {
+                        name : String
+                    }
+                    @rest path="/customers"
+                    interface CustomerService {
+                        getCustomer(id : String) : Customer {}
+                        createCustomer(request : CustomerRequest) : Customer {}
+                        getStatus() : Status {}
+                    }
+                }
+            }
+        `);
+        expect(doc.parseResult.parserErrors).toHaveLength(0);
+        generateSpringCode(doc.parseResult.value, 'model.cdiag', tmpDir);
+        const content = fs.readFileSync(
+            path.join(tmpDir, 'com', 'example', 'controller', 'CustomerServiceController.java'), 'utf-8'
+        );
+
+        // Entity import
+        expect(content).toContain('import com.example.domain.Customer;');
+        // DTO import
+        expect(content).toContain('import com.example.dto.CustomerRequest;');
+        // Enumeration import
+        expect(content).toContain('import com.example.domain.Status;');
     });
 });
 

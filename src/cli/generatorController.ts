@@ -4,11 +4,12 @@ import {
     type Model,
     type Operation,
     type Package,
+    type TypedElement,
 } from '../language/generated/ast.js';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { extractDestinationAndName } from './cli-util.js';
-import { getQualifiedName, printSpringType, toSnakeCase } from './generatorSpring.js';
+import { collectTypeImports, getQualifiedName, printSpringType, toSnakeCase } from './generatorSpring.js';
 
 type ControllerTarget = {
     name: string;
@@ -92,6 +93,11 @@ function getHttpMapping(
         };
     }
 
+    // No params, void → POST /
+    if (params.length === 0 && !hasReturn) {
+        return { annotation: 'PostMapping', path: '', params: [], responseWrap: 'void' };
+    }
+
     return undefined;
 }
 
@@ -110,7 +116,11 @@ function buildControllerSource(target: ControllerTarget, delegateType: string, d
     lines.push(`package ${qualifiedPkg}.controller;`);
     lines.push('');
     lines.push('import org.springframework.web.bind.annotation.*;');
-    lines.push(`import ${qualifiedPkg}.${delegateType};`);
+    if (target.isInterface) {
+        lines.push(`import ${qualifiedPkg}.${delegateType};`);
+    } else {
+        lines.push(`import ${qualifiedPkg}.repository.${delegateType};`);
+    }
 
     const hasResponseEntity = target.operations.some(op => {
         const m = getHttpMapping(op);
@@ -124,7 +134,10 @@ function buildControllerSource(target: ControllerTarget, delegateType: string, d
         const m = getHttpMapping(op);
         return m && m.responseWrap === 'collection';
     });
-    if (hasCollection) {
+    const hasListReturnType = target.operations.some(op =>
+        op.type?.ref && printSpringType(op).startsWith('List<')
+    );
+    if (hasCollection || hasListReturnType) {
         lines.push('import java.util.List;');
     }
 
@@ -146,6 +159,19 @@ function buildControllerSource(target: ControllerTarget, delegateType: string, d
 
     for (const e of target.entityNames) {
         lines.push(`import ${qualifiedPkg}.domain.${e};`);
+    }
+
+    // Collect all typed elements (return types + params) for import resolution
+    const allTypedElements: TypedElement[] = [];
+    for (const op of target.operations) {
+        allTypedElements.push(op);
+        for (const p of op.params ?? []) {
+            allTypedElements.push(p);
+        }
+    }
+    const typeImports = collectTypeImports(allTypedElements, pkg, 'controller');
+    for (const imp of typeImports) {
+        lines.push(imp);
     }
     lines.push('');
     lines.push('@RestController');
@@ -205,7 +231,11 @@ function buildControllerSource(target: ControllerTarget, delegateType: string, d
             }
             lines.push(`    // TODO: review mapping for operation '${op.name}'`);
             lines.push(`    public ${returnType} ${op.name}(${methodParams}) {`);
-            lines.push(`        return ${delegateName}.${op.name}(${opParams.map(p => p.name).join(', ')});`);
+            if (returnType === 'void') {
+                lines.push(`        ${delegateName}.${op.name}(${opParams.map(p => p.name).join(', ')});`);
+            } else {
+                lines.push(`        return ${delegateName}.${op.name}(${opParams.map(p => p.name).join(', ')});`);
+            }
             lines.push('    }');
             lines.push('');
         }

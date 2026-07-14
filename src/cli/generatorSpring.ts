@@ -162,6 +162,73 @@ export function findRoot(type: Class | DataType | Enumeration): Model {
 }
 
 // ---------------------------------------------------------------------------
+// Import resolution helpers
+// ---------------------------------------------------------------------------
+
+/**
+ * Determines the Java sub-package for a given AST type so that other
+ * generators can emit correct `import` statements.
+ *
+ * - Class (entity)        → "<pkg>.domain"
+ * - DataType (embeddable) → "<pkg>.domain"
+ * - DataType (DTO)        → "<pkg>.dto"
+ * - Enumeration           → "<pkg>.domain"
+ * - Interface             → "<pkg>"
+ * - PrimitiveType         → undefined (java.lang or java.time via type map)
+ */
+export function getSubPackageForType(t: { $type: string }): string | undefined {
+    switch (t.$type) {
+        case 'Class':
+            return 'domain';
+        case 'Enumeration':
+            return 'domain';
+        case 'DataType':
+            return isDtoType(t as unknown as DataType | Class) ? 'dto' : 'domain';
+        case 'Interface':
+            return '';
+        default:
+            return undefined;
+    }
+}
+
+/**
+ * Builds a sorted, de-duplicated list of `import` statements for all
+ * non-primitive types referenced in `typedElements` (properties, operations,
+ * parameters, return types).
+ *
+ * Only types that live in a *different* sub-package than `currentSubPackage`
+ * are included, so types in the same package as the generated class are
+ * correctly omitted.
+ */
+export function collectTypeImports(
+    typedElements: TypedElement[],
+    currentPkg: Package,
+    currentSubPackage: string,
+): string[] {
+    const qualifiedPkg = getQualifiedName(currentPkg, '.');
+    const imports = new Set<string>();
+
+    for (const elem of typedElements) {
+        const ref = elem.type?.ref;
+        if (!ref) continue;
+        if (ref.$type === 'PrimitiveType' || ref.$type === 'Association') continue;
+
+        const sub = getSubPackageForType(ref);
+        if (sub === undefined) continue;
+
+        // Same sub-package → no import needed
+        if (sub === currentSubPackage) continue;
+
+        const fqn = sub === ''
+            ? `${qualifiedPkg}.${ref.name}`
+            : `${qualifiedPkg}.${sub}.${ref.name}`;
+        imports.add(`import ${fqn};`);
+    }
+
+    return Array.from(imports).sort();
+}
+
+// ---------------------------------------------------------------------------
 // Iteration 1.2 – Enum generator
 // ---------------------------------------------------------------------------
 
@@ -251,6 +318,7 @@ export function generateEmbeddable(
         `${genGetter(p)}\n    ${genSetter(p)}`,
     ).join('\n\n    ');
 
+    const embeddableImports = collectTypeImports(props, pkg, 'domain');
     const fileNode = expandToNode`
         package ${qualifiedPkg}.domain;
 
@@ -258,6 +326,7 @@ export function generateEmbeddable(
         import jakarta.persistence.Embeddable;
         ${hasMulti ? 'import java.util.List;' : ''}
         ${hasNotNull ? 'import jakarta.validation.constraints.NotNull;' : ''}
+        ${embeddableImports.length > 0 ? embeddableImports.join('\n') : ''}
 
         @Embeddable
         public class ${type.name} {
@@ -475,7 +544,19 @@ export function generateJpaEntity(
         '    }',
     ].join('\n') : '';
 
-    const propAccessors    = ownProps.map(p => `    ${genGetter(p)}\n\n    ${genSetter(p)}`);
+    const propAccessors    = ownProps.map(p => {
+        if (p.name === 'id') {
+            const capitalName = 'Id';
+            return `    public Long get${capitalName}() {
+        return this.id;
+    }
+
+    public void set${capitalName}(Long id) {
+        this.id = id;
+    }`;
+        }
+        return `    ${genGetter(p)}\n\n    ${genSetter(p)}`;
+    });
     const assocAccessors   = assocFields.map(f => `    ${genGetter(f.prop)}\n\n    ${genSetter(f.prop)}`);
     const implicitAccessors = implicitClassProps.map(p => `    ${genGetter(p)}\n\n    ${genSetter(p)}`);
 
@@ -495,6 +576,18 @@ export function generateJpaEntity(
     }
     if (hasJsonIgnore) lines.push('import com.fasterxml.jackson.annotation.JsonIgnore;');
     if (hasNotNull) lines.push('import jakarta.validation.constraints.NotNull;');
+
+    // Collect referenced types that are in a different sub-package than "domain"
+    const allTypedElements: TypedElement[] = [
+        ...ownProps,
+        ...assocFields.map(f => f.prop),
+        ...implicitClassProps,
+    ];
+    const typeImports = collectTypeImports(allTypedElements, pkg, 'domain');
+    for (const imp of typeImports) {
+        lines.push(imp);
+    }
+
     lines.push('');
     lines.push(classAnnotation);
     lines.push(`public ${clz.abstract ? 'abstract ' : ''}class ${clz.name}${extendsClause} {`);
@@ -627,7 +720,11 @@ export function generateDto(
         lines.push('import java.time.LocalDateTime;');
     }
     if (hasNotNull) lines.push('import jakarta.validation.constraints.NotNull;');
-    if (hasMulti || hasDate || hasNotNull) lines.push('');
+    const typeImports = collectTypeImports(props, pkg, 'dto');
+    for (const imp of typeImports) {
+        lines.push(imp);
+    }
+    if (hasMulti || hasDate || hasNotNull || typeImports.length > 0) lines.push('');
     lines.push(`public record ${type.name}(${params}) {}`);
     lines.push('');
 
@@ -679,6 +776,24 @@ export function generateServiceImpl(
     lines.push('');
     lines.push('import org.springframework.stereotype.Service;');
     lines.push(`import ${qualifiedPkg}.${iface.name};`);
+    const hasList = operations.some(op =>
+        (op.type?.ref && printSpringType(op).startsWith('List<')) ||
+        (op.params ?? []).some(p => printSpringType(p).startsWith('List<'))
+    );
+    if (hasList) {
+        lines.push('import java.util.List;');
+    }
+    const allTypedElements: TypedElement[] = [];
+    for (const op of operations) {
+        allTypedElements.push(op);
+        for (const p of op.params ?? []) {
+            allTypedElements.push(p);
+        }
+    }
+    const typeImports = collectTypeImports(allTypedElements, pkg, 'service');
+    for (const imp of typeImports) {
+        lines.push(imp);
+    }
     lines.push('');
     lines.push('@Service');
     lines.push(`public class ${iface.name}Impl implements ${iface.name} {`);

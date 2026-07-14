@@ -2,11 +2,12 @@ import {
     type Interface,
     type Operation,
     type Package,
+    type TypedElement,
 } from '../language/generated/ast.js';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { extractDestinationAndName } from './cli-util.js';
-import { getQualifiedName, printSpringType } from './generatorSpring.js';
+import { collectTypeImports, getQualifiedName, printSpringType } from './generatorSpring.js';
 
 /**
  * Collects all Class (entity) types referenced across an interface's operations.
@@ -285,6 +286,11 @@ export function generateService(
 
     const hasPreAuthorize = operations.some(op => (op as any).preAuthorize);
 
+    const hasList = operations.some(op =>
+        (op.type?.ref && printSpringType(op).startsWith('List<')) ||
+        (op.params ?? []).some(p => printSpringType(p).startsWith('List<'))
+    );
+
     const lines: string[] = [];
     lines.push(`package ${qualifiedPkg}.service;`);
     lines.push('');
@@ -295,6 +301,9 @@ export function generateService(
     if (hasPreAuthorize) {
         lines.push('import org.springframework.security.access.prepost.PreAuthorize;');
     }
+    if (hasList) {
+        lines.push('import java.util.List;');
+    }
     lines.push(`import ${qualifiedPkg}.${iface.name};`);
     for (const e of entities) {
         lines.push(`import ${qualifiedPkg}.domain.${e};`);
@@ -302,6 +311,18 @@ export function generateService(
     }
     for (const pair of mappingPairs) {
         lines.push(`import ${qualifiedPkg}.dto.${pair.dtoName};`);
+    }
+    // Collect all typed elements (return types + params) for import resolution
+    const allTypedElements: TypedElement[] = [];
+    for (const op of operations) {
+        allTypedElements.push(op);
+        for (const p of op.params ?? []) {
+            allTypedElements.push(p);
+        }
+    }
+    const typeImports = collectTypeImports(allTypedElements, pkg, 'service');
+    for (const imp of typeImports) {
+        lines.push(imp);
     }
     lines.push('');
     lines.push('@Service');
@@ -361,9 +382,37 @@ function generateServiceInterface(
     const lines: string[] = [];
     lines.push(`package ${qualifiedPkg};`);
     lines.push('');
-    for (const e of collectReferencedEntities(iface)) {
-        lines.push(`import ${qualifiedPkg}.domain.${e};`);
+
+    const hasList = operations.some(op =>
+        op.upper !== undefined && op.upper !== 1 ||
+        (op.params ?? []).some(p => p.upper !== undefined && p.upper !== 1)
+    );
+    if (hasList) {
+        lines.push('import java.util.List;');
     }
+
+    const hasDate = operations.some(op => {
+        const checkType = (t: any) => t?.ref?.$type === 'PrimitiveType' && (t.ref.name === 'Date' || t.ref.name === 'DateTime');
+        return checkType(op.type) || (op.params ?? []).some(p => checkType(p.type));
+    });
+    if (hasDate) {
+        lines.push('import java.time.LocalDate;');
+        lines.push('import java.time.LocalDateTime;');
+    }
+
+    // Collect all typed elements (return types + params) for import resolution
+    const allTypedElements: TypedElement[] = [];
+    for (const op of operations) {
+        allTypedElements.push(op);
+        for (const p of op.params ?? []) {
+            allTypedElements.push(p);
+        }
+    }
+    const typeImports = collectTypeImports(allTypedElements, pkg, '');
+    for (const imp of typeImports) {
+        lines.push(imp);
+    }
+
     lines.push('');
     lines.push(`public interface ${iface.name} {`);
     lines.push('');
