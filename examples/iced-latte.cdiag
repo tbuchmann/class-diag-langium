@@ -506,29 +506,29 @@ package icedlatte {
 
     @rest path="/api/v1/users"
     interface UserProfileService {
-        getUserProfile() : UserLookupSnapshot {
+        getUserProfile(userId : String) : UserLookupSnapshot {
             spec "Retrieves the authenticated user's profile information"
         }
-        editUserProfile() : UserLookupSnapshot {
+        editUserProfile(userId : String, request : UserLookupSnapshot) : UserLookupSnapshot {
             spec "Updates the authenticated user's profile fields"
         }
-        changeUserPassword() {
+        changeUserPassword(userId : String, currentPassword : String, newPassword : String) {
             spec "Changes the authenticated user's password after verifying current password"
         }
-        deleteUserProfile() {
+        deleteUserProfile(userId : String) {
             spec "Deletes the authenticated user's profile and associated data"
         }
     }
 
     @rest path="/api/v1/users/addresses"
     interface DeliveryAddressService {
-        getDeliveryAddresses() : String [0..-1] {
+        getDeliveryAddresses(userId : String) : String [0..-1] {
             spec "Retrieves all delivery addresses for the authenticated user"
         }
-        addDeliveryAddress(request : CheckoutOrderRequest) {
+        addDeliveryAddress(userId : String, request : CheckoutOrderRequest) {
             spec "Adds a new delivery address for the authenticated user"
         }
-        updateDeliveryAddress(addressId : String) {
+        updateDeliveryAddress(addressId : String, request : CheckoutOrderRequest) {
             spec "Updates an existing delivery address"
         }
         deleteDeliveryAddress(addressId : String) {
@@ -541,20 +541,20 @@ package icedlatte {
 
     @rest path="/api/v1/users/avatar"
     interface UserAvatarService {
-        uploadUserAvatar() {
+        uploadUserAvatar(userId : String, fileMetadata : FileMetadataDto) {
             spec "Uploads a new avatar image for the authenticated user"
         }
-        getUserAvatarLink() : String {
+        getUserAvatarLink(userId : String) : String {
             spec "Returns the URL to the user's current avatar image"
         }
-        deleteUserAvatar() {
+        deleteUserAvatar(userId : String) {
             spec "Deletes the user's current avatar"
         }
     }
 
     @rest path="/api/v1/products"
     interface ProductCatalogService {
-        getProducts() : String [0..-1] {
+        getProducts(page : Integer, size : Integer) : String [0..-1] {
             spec "Retrieves a paginated list of products with optional filters"
         }
         getAllSellers() : String [0..-1] {
@@ -563,7 +563,7 @@ package icedlatte {
         getAllBrands() : String [0..-1] {
             spec "Retrieves a list of all distinct brand names"
         }
-        getProductsByIds() : String [0..-1] {
+        getProductsByIds(productIds : String [0..-1]) : String [0..-1] {
             spec "Retrieves products by a list of product IDs"
         }
         getProductById(productId : String) : ProductSnapshot {
@@ -573,26 +573,26 @@ package icedlatte {
 
     @rest path="/api/v1/cart"
     interface ShoppingCartService {
-        getShoppingCart() : CartSnapshot {
+        getShoppingCart(userId : String) : CartSnapshot {
             spec "Retrieves the current user's shopping cart with all items"
         }
-        addNewItemToShoppingCart(request : AddCartItemRequest) {
+        addNewItemToShoppingCart(userId : String, request : AddCartItemRequest) {
             spec "Adds a new item to the shopping cart"
         }
-        updateProductQuantityInShoppingCartItem() {
+        updateProductQuantityInShoppingCartItem(userId : String, itemId : String, quantity : Integer) {
             spec "Updates the quantity of a product in a cart item"
         }
-        deleteItemsFromShoppingCart() {
+        deleteItemsFromShoppingCart(userId : String, itemIds : String [0..-1]) {
             spec "Removes items from the shopping cart"
         }
     }
 
     @rest path="/api/v1/orders"
     interface OrderService {
-        getOrders() : String [0..-1] {
+        getOrders(userId : String) : String [0..-1] {
             spec "Retrieves all orders for the authenticated user with pagination"
         }
-        createOrder(request : CheckoutOrderRequest) {
+        createOrder(userId : String, request : CheckoutOrderRequest) {
             spec "Creates a new order from the shopping cart contents"
         }
         getOrderById(orderId : String) {
@@ -624,13 +624,13 @@ package icedlatte {
 
     @rest path="/api/v1/payment"
     interface PaymentService {
-        createCheckout() : StripeSessionResult {
+        createCheckout(orderId : String) : StripeSessionResult {
             spec "Creates a Stripe checkout session for an order"
         }
         getCheckoutStatus(orderId : String) {
             spec "Retrieves the current payment status for a checkout"
         }
-        processStripeWebhook() {
+        processStripeWebhook(payload : String) {
             spec "Processes an incoming Stripe webhook event"
         }
     }
@@ -643,66 +643,66 @@ package icedlatte {
         getRatingAndReviewStat(productId : String) {
             spec "Retrieves aggregated rating statistics for a product"
         }
-        addNewProductReview(productId : String) {
+        addNewProductReview(productId : String, userId : String, text : String, rating : Integer) {
             spec "Adds a new review for a product"
         }
         deleteProductReview(productId : String, productReviewId : String) {
             spec "Deletes a product review"
         }
-        getProductReview(productId : String) {
+        getProductReview(productId : String, userId : String) {
             spec "Retrieves the authenticated user's review for a product"
         }
-        getUserReviews() : String [0..-1] {
+        getUserReviews(userId : String) : String [0..-1] {
             spec "Retrieves all reviews written by the authenticated user"
         }
-        addProductReviewLike(productId : String, productReviewId : String) {
+        addProductReviewLike(productId : String, productReviewId : String, userId : String) {
             spec "Adds or removes a like on a product review"
         }
     }
 
     @rest path="/api/v1/favorites"
     interface FavoriteService {
-        getListOfFavoriteProducts() : String [0..-1] {
+        getListOfFavoriteProducts(userId : String) : String [0..-1] {
             spec "Retrieves the authenticated user's list of favorite products"
         }
-        addListOfFavoriteProducts() {
+        addListOfFavoriteProducts(userId : String, productIds : String [0..-1]) {
             spec "Adds products to the user's favorites list"
         }
-        removeProductFromFavorite(productId : String) {
+        removeProductFromFavorite(userId : String, productId : String) {
             spec "Removes a product from the user's favorites list"
         }
     }
 
     @rest path="/api/v1/auth"
     interface AuthenticationService {
-        register() {
+        register(email : String, password : String) {
             spec "Registers a new user account with email and password"
         }
-        confirmEmail() {
+        confirmEmail(token : String) {
             spec "Confirms a user's email address using a verification token"
         }
-        authenticate() {
+        authenticate(email : String, password : String) {
             spec "Authenticates a user with email and password, returns JWT tokens"
         }
-        refreshToken() {
+        refreshToken(refreshToken : String) {
             spec "Refreshes an expired access token using a refresh token"
         }
-        logout() {
+        logout(refreshToken : String) {
             spec "Revokes the current refresh token"
         }
-        logoutAll() {
+        logoutAll(userId : String) {
             spec "Revokes all active sessions for the authenticated user"
         }
-        getSessions() : String [0..-1] {
+        getSessions(userId : String) : String [0..-1] {
             spec "Retrieves all active sessions for the authenticated user"
         }
-        revokeSession(sessionId : String) {
+        revokeSession(userId : String, sessionId : String) {
             spec "Revokes a specific session by its ID"
         }
-        forgotPassword() {
+        forgotPassword(email : String) {
             spec "Sends a password reset email to the user"
         }
-        changePassword() {
+        changePassword(resetToken : String, newPassword : String) {
             spec "Changes the user's password using a reset token"
         }
     }
@@ -712,29 +712,29 @@ package icedlatte {
         initiateOAuth(provider : String) {
             spec "Initiates the OAuth2 login flow for the specified provider"
         }
-        completeOAuthCallback() {
+        completeOAuthCallback(code : String, state : String) {
             spec "Completes the OAuth2 login flow after provider callback"
         }
-        completeOAuthTokenHandoff() {
+        completeOAuthTokenHandoff(token : String) {
             spec "Completes OAuth2 authentication via token handoff"
         }
     }
 
     @rest path="/api/v1/support-chat"
     interface SupportChatService {
-        getSupportChatStatus() {
+        getSupportChatStatus(userId : String) {
             spec "Retrieves the availability status of support chat"
         }
-        getCurrentSupportChatConversation() {
+        getCurrentSupportChatConversation(userId : String) {
             spec "Retrieves the current support conversation for the user"
         }
-        createSupportChatWebSocketTicket() {
+        createSupportChatWebSocketTicket(userId : String) {
             spec "Creates a WebSocket connection ticket for real-time chat"
         }
         getSupportChatMessages(conversationId : String) : String [0..-1] {
             spec "Retrieves messages for a support conversation with pagination"
         }
-        sendSupportChatMessage(conversationId : String) {
+        sendSupportChatMessage(conversationId : String, message : String) {
             spec "Sends a new message in a support conversation"
         }
     }

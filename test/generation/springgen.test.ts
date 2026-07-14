@@ -1373,6 +1373,44 @@ describe('Iteration 2 – Richer service generator', () => {
         expect(content).toContain('import com.example.domain.Order;');
         expect(content).toContain('import com.example.repository.OrderRepository;');
     });
+
+    test('Service infers repository from DTO by name and property overlap', async () => {
+        const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'spring-it2e-'));
+        const doc = await parse(`
+            package com {
+                package example {
+                    primitive String
+                    primitive Integer
+                    primitive Decimal
+                    class ProductInfo {
+                        name : String
+                        price : Decimal
+                        quantity : Integer
+                    }
+                    @dto datatype ProductSnapshot {
+                        name : String
+                        price : Decimal
+                        quantity : Integer
+                    }
+                    interface ProductCatalogService {
+                        getProductById(productId : String) : ProductSnapshot {
+                            spec "Retrieves a product by ID"
+                        }
+                    }
+                }
+            }
+        `);
+        expect(doc.parseResult.parserErrors).toHaveLength(0);
+        generateSpringCode(doc.parseResult.value, 'model.cdiag', tmpDir);
+        const content = fs.readFileSync(
+            path.join(tmpDir, 'com', 'example', 'service', 'ProductCatalogServiceImpl.java'), 'utf-8'
+        );
+
+        // Repository should be injected even though only a DTO is referenced
+        expect(content).toContain('private final ProductInfoRepository productInfoRepository;');
+        expect(content).toContain('import com.example.repository.ProductInfoRepository;');
+        expect(content).toContain('import com.example.domain.ProductInfo;');
+    });
 });
 
 // ---------------------------------------------------------------------------

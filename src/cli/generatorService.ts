@@ -1,5 +1,8 @@
 import {
+    type Class,
+    type DataType,
     type Interface,
+    type Model,
     type Operation,
     type Package,
     type TypedElement,
@@ -27,6 +30,151 @@ function collectReferencedEntities(iface: Interface): string[] {
         }
     }
     return Array.from(entityNames).sort();
+}
+
+/**
+ * Finds the root Model from a Package by walking up the containment chain.
+ */
+function findRootModel(pkg: Package): Model | undefined {
+    let current: Package | undefined = pkg;
+    while (current !== undefined) {
+        if (current.$container.$type === 'Model') {
+            return current.$container as unknown as Model;
+        }
+        current = current.$container as Package | undefined;
+    }
+    return undefined;
+}
+
+/**
+ * Collects all Class types in the model (all packages).
+ */
+function collectAllClasses(model: Model | undefined): Class[] {
+    if (!model) return [];
+    const result: Class[] = [];
+    function collect(pkg: Package) {
+        for (const t of pkg.types) {
+            if (t.$type === 'Class') {
+                result.push(t as Class);
+            }
+        }
+        for (const sub of pkg.packages) {
+            collect(sub);
+        }
+    }
+    model.packages.forEach(collect);
+    return result;
+}
+
+/**
+ * Collects all DataType types in the model (all packages).
+ */
+function collectAllDataTypes(model: Model | undefined): DataType[] {
+    if (!model) return [];
+    const result: DataType[] = [];
+    function collect(pkg: Package) {
+        for (const t of pkg.types) {
+            if (t.$type === 'DataType') {
+                result.push(t as DataType);
+            }
+        }
+        for (const sub of pkg.packages) {
+            collect(sub);
+        }
+    }
+    model.packages.forEach(collect);
+    return result;
+}
+
+/**
+ * Strips common suffixes from a DTO name to get a base name for matching.
+ */
+function stripDtoSuffix(name: string): string {
+    return name
+        .replace(/(Snapshot|Request|Response|Dto|DTO|Result)$/, '');
+}
+
+/**
+ * Computes the property name overlap between a DTO and a Class.
+ * Returns the number of matching property names.
+ */
+function countMatchingProperties(dto: DataType | Class, entity: Class): number {
+    const dtoProps = new Set((dto.properties ?? []).map((p: TypedElement) => p.name));
+    const entityProps = new Set((entity.properties ?? []).map((p: TypedElement) => p.name));
+    let count = 0;
+    for (const prop of dtoProps) {
+        if (entityProps.has(prop)) count++;
+    }
+    return count;
+}
+
+/**
+ * Infers which entity types correspond to the DTOs used in an interface's operations.
+ * Uses both name-based and property-based matching.
+ * Returns entity names that are not already in `alreadyReferenced`.
+ */
+function inferEntitiesFromDTOs(
+    iface: Interface,
+    alreadyReferenced: Set<string>,
+): string[] {
+    const model = findRootModel(iface.$container as Package);
+    const allClasses = collectAllClasses(model);
+    const allDTOs = collectAllDataTypes(model);
+
+    // Collect all DTOs used in operations
+    const usedDtoNames = new Set<string>();
+    for (const op of iface.operations ?? []) {
+        const opNode = op as Operation;
+        const returnType = opNode.type?.ref;
+        if (returnType?.$type === 'DataType') {
+            usedDtoNames.add(returnType.name);
+        }
+        for (const param of opNode.params ?? []) {
+            if (param.type?.ref?.$type === 'DataType') {
+                usedDtoNames.add(param.type.ref.name);
+            }
+        }
+    }
+
+    const inferred = new Set<string>();
+
+    for (const dtoName of usedDtoNames) {
+        if (alreadyReferenced.has(dtoName) || inferred.has(dtoName)) continue;
+
+        const dto = allDTOs.find(d => d.name === dtoName);
+        if (!dto) continue;
+
+        // Try name-based matching first
+        const baseName = stripDtoSuffix(dtoName);
+        const nameMatch = allClasses.find(c =>
+            !alreadyReferenced.has(c.name) && !inferred.has(c.name) &&
+            (c.name.toLowerCase().includes(baseName.toLowerCase()) ||
+                baseName.toLowerCase().includes(c.name.toLowerCase().replace(/entity$/i, '')))
+        );
+
+        if (nameMatch) {
+            inferred.add(nameMatch.name);
+            continue;
+        }
+
+        // Fall back to property-based matching
+        let bestMatch: Class | undefined;
+        let bestScore = 0;
+        for (const cls of allClasses) {
+            if (alreadyReferenced.has(cls.name) || inferred.has(cls.name)) continue;
+            const score = countMatchingProperties(dto, cls);
+            // Require at least 2 matching properties to avoid false positives
+            if (score > bestScore && score >= 2) {
+                bestScore = score;
+                bestMatch = cls;
+            }
+        }
+        if (bestMatch) {
+            inferred.add(bestMatch.name);
+        }
+    }
+
+    return Array.from(inferred).sort();
 }
 
 /**
@@ -226,7 +374,9 @@ export function generateService(
     const qualifiedPkg = getQualifiedName(pkg, '.');
 
     const operations = (iface.operations ?? []) as Operation[];
-    const entities = collectReferencedEntities(iface);
+    const directEntities = collectReferencedEntities(iface);
+    const inferredEntities = inferEntitiesFromDTOs(iface, new Set(directEntities));
+    const entities = [...directEntities, ...inferredEntities];
     const mappingPairs = collectMappingPairs(iface);
 
     // Build repository field declarations and constructor params
@@ -265,9 +415,9 @@ export function generateService(
             body = ` {\n${crudBody}\n    }`;
         } else {
             body = ` {
-        // generated start
+        //generated start
         throw new UnsupportedOperationException("Not yet implemented");
-        // generated end
+        //generated end
     }`;
         }
 
