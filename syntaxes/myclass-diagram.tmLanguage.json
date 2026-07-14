@@ -35,7 +35,7 @@
               }
           },
           {
-              "match": "\\b(String|Integer|Boolean|Float|Decimal|void)\\b",
+              "match": "\\b(String|Integer|Boolean|Float|Decimal|Long|void)\\b",
               "name": "support.type.primitive.class-diagram"
           }
       ]
