@@ -96,10 +96,12 @@ package icedlatte {
         itemsQuantity : Integer
         itemsTotalPrice : Decimal
         productsQuantity : Integer
+        items : CartItemSnapshot [0..-1]
     }
 
     @dto datatype CartItemSnapshot {
         id : String
+        productId : String
         productQuantity : Integer
     }
 
@@ -112,6 +114,7 @@ package icedlatte {
         recipientName : String [1..1]
         recipientSurname : String [1..1]
         recipientPhone : String
+        address : OrderAddressRequest [1..1]
     }
 
     @dto datatype OrderAddressRequest {
@@ -119,6 +122,34 @@ package icedlatte {
         city : String [1..1]
         line : String [1..1]
         postcode : String [1..1]
+    }
+
+    @dto datatype OrderSnapshot {
+        id : String
+        userId : String
+        status : OrderStatus
+        recipientName : String
+        recipientSurname : String
+        recipientPhone : String
+        itemsQuantity : Integer
+        itemsTotalPrice : Decimal
+    }
+
+    @dto datatype OrderItemSnapshot {
+        id : String
+        productId : String
+        productName : String
+        productPrice : Decimal
+        productsQuantity : Integer
+    }
+
+    @dto datatype OrderStatusHistorySnapshot {
+        id : String
+        oldStatus : OrderStatus
+        newStatus : OrderStatus
+        changedBy : String
+        reason : String
+        changedAt : DateTime
     }
 
     @dto datatype UserLookupSnapshot {
@@ -143,6 +174,101 @@ package icedlatte {
     @dto datatype StripeSessionResult {
         sessionId : String
         checkoutUrl : String
+    }
+
+    @dto datatype AuthResponse {
+        accessToken : String [1..1]
+        refreshToken : String [1..1]
+        userId : String [1..1]
+    }
+
+    @dto datatype AuthSessionSnapshot {
+        id : String
+        userAgent : String
+        ipAddress : String
+        createdAt : DateTime
+        lastUsedAt : DateTime
+        expiresAt : DateTime
+    }
+
+    @dto datatype RegisterRequest {
+        email : String [1..1]
+        password : String [1..1]
+        firstName : String [1..1]
+        lastName : String [1..1]
+    }
+
+    @dto datatype EditUserProfileRequest {
+        firstName : String
+        lastName : String
+        birthDate : Date
+        phoneNumber : String
+    }
+
+    @dto datatype ChangePasswordRequest {
+        currentPassword : String [1..1]
+        newPassword : String [1..1]
+    }
+
+    @dto datatype DeliveryAddressRequest {
+        label : String [1..1]
+        line : String [1..1]
+        city : String [1..1]
+        country : String [1..1]
+        postcode : String [1..1]
+        isDefault : Boolean
+    }
+
+    @dto datatype DeliveryAddressSnapshot {
+        id : String
+        label : String
+        line : String
+        city : String
+        country : String
+        postcode : String
+        isDefault : Boolean
+    }
+
+    @dto datatype ProductReviewSnapshot {
+        id : String
+        userId : String
+        productId : String
+        text : String
+        productRating : Integer
+        likesCount : Integer
+        dislikesCount : Integer
+        createdAt : DateTime
+    }
+
+    @dto datatype RatingSummarySnapshot {
+        averageRating : Decimal
+        reviewsCount : Integer
+    }
+
+    @dto datatype SupportChatStatusSnapshot {
+        available : Boolean
+        queuePosition : Integer
+    }
+
+    @dto datatype SupportConversationSnapshot {
+        id : String
+        userId : String
+        createdAt : DateTime
+        lastMessageAt : DateTime
+    }
+
+    @dto datatype SupportMessageSnapshot {
+        id : String
+        conversationId : String
+        senderType : SupportMessageSenderType
+        body : String
+        deliveryStatus : SupportMessageDeliveryStatus
+        createdAt : DateTime
+    }
+
+    @dto datatype CheckoutStatusSnapshot {
+        status : PaymentStatus
+        providerSessionId : String
     }
 
     // ------------------------------------------------------------------
@@ -446,6 +572,15 @@ package icedlatte {
         lastModified : DateTime
     }
 
+    class EmailTokenEntity {
+        id : String [1..1]
+        userId : String [1..1]
+        token : String [1..1]
+        purpose : TokenPurpose [1..1]
+        expiresAt : DateTime [1..1]
+        usedAt : DateTime
+    }
+
     class OAuthIdentityEntity extends AuditableEntity {
         id : String [1..1]
         userId : String [1..1]
@@ -507,235 +642,238 @@ package icedlatte {
     @rest path="/api/v1/users"
     interface UserProfileService {
         getUserProfile(userId : String) : UserLookupSnapshot {
-            spec "Retrieves the authenticated user's profile information"
+            spec "Retrieves the user's profile by userId. Returns a UserLookupSnapshot with id, firstName, lastName, email. Throws NotFoundException if user not found."
         }
-        editUserProfile(userId : String, request : UserLookupSnapshot) : UserLookupSnapshot {
-            spec "Updates the authenticated user's profile fields"
+        editUserProfile(userId : String, request : EditUserProfileRequest) : UserLookupSnapshot {
+            spec "Updates the user's profile fields (firstName, lastName, birthDate, phoneNumber) by userId. Returns the updated UserLookupSnapshot. Ignores null fields in the request."
         }
-        changeUserPassword(userId : String, currentPassword : String, newPassword : String) {
-            spec "Changes the authenticated user's password after verifying current password"
+        changeUserPassword(userId : String, request : ChangePasswordRequest) {
+            spec "Changes the user's password by userId. Verifies currentPassword against the stored hash using BCrypt, then encodes and saves the newPassword. Throws BadCredentialsException if currentPassword is wrong."
         }
         deleteUserProfile(userId : String) {
-            spec "Deletes the authenticated user's profile and associated data"
+            spec "Deletes the user by userId and cascades to related entities: UserGrantedAuthority, Address, DeliveryAddressEntity, UserAvatarUpload, AuthSessionEntity, OAuthIdentityEntity, FavoriteListEntity, ShoppingCart. Also deletes associated AuthSessionEntity records."
         }
     }
 
     @rest path="/api/v1/users/addresses"
     interface DeliveryAddressService {
-        getDeliveryAddresses(userId : String) : String [0..-1] {
-            spec "Retrieves all delivery addresses for the authenticated user"
+        getDeliveryAddresses(userId : String) : DeliveryAddressSnapshot [0..-1] {
+            spec "Retrieves all delivery addresses for the user by userId. Returns a list of DeliveryAddressSnapshot with id, label, line, city, country, postcode, isDefault."
         }
-        addDeliveryAddress(userId : String, request : CheckoutOrderRequest) {
-            spec "Adds a new delivery address for the authenticated user"
+        addDeliveryAddress(userId : String, request : DeliveryAddressRequest) {
+            spec "Adds a new delivery address for the user by userId. If request.isDefault is true, sets all existing addresses for the user to isDefault=false first. Saves the new DeliveryAddressEntity."
         }
-        updateDeliveryAddress(addressId : String, request : CheckoutOrderRequest) {
-            spec "Updates an existing delivery address"
+        updateDeliveryAddress(addressId : String, request : DeliveryAddressRequest) {
+            spec "Updates an existing delivery address by addressId. Updates label, line, city, country, postcode, isDefault. If isDefault is true, unsets other defaults for the same user."
         }
         deleteDeliveryAddress(addressId : String) {
-            spec "Deletes a delivery address by its ID"
+            spec "Deletes a delivery address by addressId. If the deleted address was the default, sets another address as default if any remain."
         }
         setDefaultDeliveryAddress(addressId : String) {
-            spec "Sets a delivery address as the default for the user"
+            spec "Sets the delivery address as default by addressId. Unsets isDefault on all other addresses for the same user."
         }
     }
 
     @rest path="/api/v1/users/avatar"
     interface UserAvatarService {
         uploadUserAvatar(userId : String, fileMetadata : FileMetadataDto) {
-            spec "Uploads a new avatar image for the authenticated user"
+            spec "Creates a new UserAvatarUpload entry for the user by userId with status PENDING_UPLOAD. Stores the provided bucketName and fileName from fileMetadata. Marks any previous active avatar as SUPERSEDED. Returns the id of the new upload for the client to upload to."
         }
         getUserAvatarLink(userId : String) : String {
-            spec "Returns the URL to the user's current avatar image"
+            spec "Returns the URL to the user's current active avatar image by userId. Returns null if no avatar exists. The URL points to the processedBucket/processedKey of the active UserAvatarUpload with status READY."
         }
         deleteUserAvatar(userId : String) {
-            spec "Deletes the user's current avatar"
+            spec "Marks the user's active avatar as SUPERSEDED by userId. Does not delete the file from storage, just sets active=false on the UserAvatarUpload."
         }
     }
 
     @rest path="/api/v1/products"
     interface ProductCatalogService {
-        getProducts(page : Integer, size : Integer) : String [0..-1] {
-            spec "Retrieves a paginated list of products with optional filters"
+        getProducts(page : Integer, size : Integer) : ProductSnapshot [0..-1] {
+            spec "Retrieves a paginated list of products (PageRequest of size 'size' starting at 'page'). Returns a list of ProductSnapshot. Only returns products where active=true. Sorted by dateAdded descending."
         }
         getAllSellers() : String [0..-1] {
-            spec "Retrieves a list of all distinct seller names"
+            spec "Retrieves a list of all distinct sellerName values from ProductInfo where active=true."
         }
         getAllBrands() : String [0..-1] {
-            spec "Retrieves a list of all distinct brand names"
+            spec "Retrieves a list of all distinct brandName values from ProductInfo where active=true."
         }
-        getProductsByIds(productIds : String [0..-1]) : String [0..-1] {
-            spec "Retrieves products by a list of product IDs"
+        getProductsByIds(productIds : String [0..-1]) : ProductSnapshot [0..-1] {
+            spec "Retrieves products by a list of product IDs. Returns a list of ProductSnapshot for each ID found. Ignores IDs that don't exist."
         }
         getProductById(productId : String) : ProductSnapshot {
-            spec "Retrieves a single product by its ID"
+            spec "Retrieves a single product by its ID. Returns a ProductSnapshot. Throws NotFoundException if product not found."
         }
     }
 
     @rest path="/api/v1/cart"
     interface ShoppingCartService {
         getShoppingCart(userId : String) : CartSnapshot {
-            spec "Retrieves the current user's shopping cart with all items"
+            spec "Retrieves the user's shopping cart by userId. Returns a CartSnapshot with id, userId, itemsQuantity, itemsTotalPrice, productsQuantity, and a list of CartItemSnapshot. If no cart exists, creates a new one."
         }
         addNewItemToShoppingCart(userId : String, request : AddCartItemRequest) {
-            spec "Adds a new item to the shopping cart"
+            spec "Adds an item to the user's cart by userId. If a ShoppingCartItem with the same productId already exists, increments productQuantity by request.productQuantity. Otherwise creates a new ShoppingCartItem. Recalculates itemsQuantity and itemsTotalPrice."
         }
         updateProductQuantityInShoppingCartItem(userId : String, itemId : String, quantity : Integer) {
-            spec "Updates the quantity of a product in a cart item"
+            spec "Updates the quantity of a cart item by itemId. If quantity is 0, removes the item. Recalculates itemsQuantity and itemsTotalPrice for the cart."
         }
         deleteItemsFromShoppingCart(userId : String, itemIds : String [0..-1]) {
-            spec "Removes items from the shopping cart"
+            spec "Removes the specified items by their IDs from the user's cart. Recalculates itemsQuantity and itemsTotalPrice."
         }
     }
 
     @rest path="/api/v1/orders"
     interface OrderService {
-        getOrders(userId : String) : String [0..-1] {
-            spec "Retrieves all orders for the authenticated user with pagination"
+        getOrders(userId : String) : OrderSnapshot [0..-1] {
+            spec "Retrieves all orders for the user by userId. Returns a list of OrderSnapshot with id, userId, status, recipientName, recipientSurname, recipientPhone, itemsQuantity, itemsTotalPrice. Sorted by createdAt descending."
         }
-        createOrder(userId : String, request : CheckoutOrderRequest) {
-            spec "Creates a new order from the shopping cart contents"
+        createOrder(userId : String, request : CheckoutOrderRequest) : OrderSnapshot {
+            spec "Creates a new order from the user's shopping cart by userId. Retrieves the ShoppingCart and its items. Creates Order, OrderItem for each cart item, and OrderAddress from request.address. Sets status to CREATED, computes itemsQuantity and itemsTotalPrice from cart items. Closes the ShoppingCart (sets closedAt). Returns an OrderSnapshot."
         }
-        getOrderById(orderId : String) {
-            spec "Retrieves a single order by its ID"
+        getOrderById(orderId : String) : OrderSnapshot {
+            spec "Retrieves a single order by its ID. Returns an OrderSnapshot. Throws NotFoundException if not found."
         }
         cancelOrder(orderId : String) {
-            spec "Cancels an order if within the cancellation deadline"
+            spec "Cancels an order by orderId. Only allowed if status is PENDING_PAYMENT or PAID. Sets status to CANCELLED. Adds an OrderStatusHistory entry with oldStatus, newStatus=CANCELLED, changedBy=current user."
         }
         requestRefund(orderId : String) {
-            spec "Requests a refund for a delivered order"
+            spec "Requests a refund for an order by orderId. Only allowed if status is DELIVERED. Sets status to REFUND_REQUESTED. Adds an OrderStatusHistory entry."
         }
         reorder(orderId : String) {
-            spec "Creates a new order based on a previous order's items"
+            spec "Creates a new shopping cart from a previous order's items by orderId. Creates new ShoppingCartItems for each OrderItem in the order. Returns the new cart ID."
         }
-        getOrderHistory(orderId : String) : String [0..-1] {
-            spec "Retrieves the status change history for an order"
+        getOrderHistory(orderId : String) : OrderStatusHistorySnapshot [0..-1] {
+            spec "Retrieves the status change history for an order by orderId. Returns a list of OrderStatusHistorySnapshot with id, oldStatus, newStatus, changedBy, reason, changedAt. Sorted by changedAt ascending."
         }
     }
 
     @rest path="/api/v1/admin/orders"
     interface AdminOrderService {
-        getAllOrders() : String [0..-1] {
-            spec "Retrieves all orders in the system (admin only)"
+        getAllOrders() : OrderSnapshot [0..-1] {
+            spec "Retrieves all orders in the system. Returns a list of OrderSnapshot. Sorted by createdAt descending."
         }
-        updateOrderStatus(orderId : String) {
-            spec "Updates the status of an order (admin only)"
+        updateOrderStatus(orderId : String, newStatus : OrderStatus) {
+            spec "Updates the status of an order by orderId to newStatus. Adds an OrderStatusHistory entry with oldStatus, newStatus, changedBy='admin'. Throws NotFoundException if order not found."
+        }
+        deleteOrder(orderId : String) {
+            spec "Deletes an order by orderId and cascades to OrderItem, OrderAddress, and OrderStatusHistory. Throws NotFoundException if order not found."
         }
     }
 
     @rest path="/api/v1/payment"
     interface PaymentService {
         createCheckout(orderId : String) : StripeSessionResult {
-            spec "Creates a Stripe checkout session for an order"
+            spec "Creates a Stripe checkout session for an order by orderId. Looks up the Order and its items, computes amountMinor and currency. Creates a Payment with status STRIPE_SESSION_CREATED, provider=STRIPE, and checkoutIdempotencyKey. Returns a StripeSessionResult with sessionId and checkoutUrl from the Stripe API."
         }
-        getCheckoutStatus(orderId : String) {
-            spec "Retrieves the current payment status for a checkout"
+        getCheckoutStatus(orderId : String) : CheckoutStatusSnapshot {
+            spec "Retrieves the current payment status for an order by orderId. Returns a CheckoutStatusSnapshot with status and providerSessionId. Throws NotFoundException if no Payment found for the order."
         }
         processStripeWebhook(payload : String) {
-            spec "Processes an incoming Stripe webhook event"
+            spec "Processes an incoming Stripe webhook event. Verifies the Stripe signature. Creates a StripeWebhookEvent with eventType and status=PROCESSING. Updates the corresponding Payment.status based on the event type (e.g. payment_intent.succeeded → PAID). Sets status=PROCESSED on the StripeWebhookEvent. Idempotent based on stripeEventId."
         }
     }
 
     @rest path="/api/v1/products"
     interface ProductReviewService {
-        getProductReviewsAndRatings(productId : String) : String [0..-1] {
-            spec "Retrieves all reviews and rating statistics for a product"
+        getProductReviewsAndRatings(productId : String) : ProductReviewSnapshot [0..-1] {
+            spec "Retrieves all reviews for a product by productId. Returns a list of ProductReviewSnapshot with id, userId, productId, text, productRating, likesCount, dislikesCount, createdAt. Sorted by createdAt descending."
         }
-        getRatingAndReviewStat(productId : String) {
-            spec "Retrieves aggregated rating statistics for a product"
+        getRatingAndReviewStat(productId : String) : RatingSummarySnapshot {
+            spec "Retrieves aggregated rating statistics for a product by productId. Returns a RatingSummarySnapshot with averageRating and reviewsCount. Returns zeros if no reviews exist."
         }
-        addNewProductReview(productId : String, userId : String, text : String, rating : Integer) {
-            spec "Adds a new review for a product"
+        addNewProductReview(productId : String, userId : String, text : String, rating : Integer) : ProductReviewSnapshot {
+            spec "Adds a new review for a product by productId. Checks that the user hasn't already reviewed this product. Creates a ProductReview with userId, productId, text, productRating=rating, likesCount=0, dislikesCount=0. Updates ProductInfo.averageRating and reviewsCount. Returns a ProductReviewSnapshot."
         }
         deleteProductReview(productId : String, productReviewId : String) {
-            spec "Deletes a product review"
+            spec "Deletes a product review by productReviewId. Verifies that the review belongs to the given productId. Updates ProductInfo.averageRating and reviewsCount after deletion. Also deletes all ProductReviewLike for this review."
         }
-        getProductReview(productId : String, userId : String) {
-            spec "Retrieves the authenticated user's review for a product"
+        getProductReview(productId : String, userId : String) : ProductReviewSnapshot {
+            spec "Retrieves the user's review for a product by productId and userId. Returns a ProductReviewSnapshot. Returns null if the user hasn't reviewed this product."
         }
-        getUserReviews(userId : String) : String [0..-1] {
-            spec "Retrieves all reviews written by the authenticated user"
+        getUserReviews(userId : String) : ProductReviewSnapshot [0..-1] {
+            spec "Retrieves all reviews written by a user by userId. Returns a list of ProductReviewSnapshot. Sorted by createdAt descending."
         }
-        addProductReviewLike(productId : String, productReviewId : String, userId : String) {
-            spec "Adds or removes a like on a product review"
+        addProductReviewLike(productId : String, productReviewId : String, userId : String, isLike : Boolean) {
+            spec "Adds or updates a like/dislike on a product review by productReviewId. If a ProductReviewLike already exists for the same userId and review, updates isLike. Otherwise creates a new one. Increments likesCount or dislikesCount on the ProductReview accordingly. If toggling from like to dislike, decrements likesCount and increments dislikesCount."
         }
     }
 
     @rest path="/api/v1/favorites"
     interface FavoriteService {
         getListOfFavoriteProducts(userId : String) : String [0..-1] {
-            spec "Retrieves the authenticated user's list of favorite products"
+            spec "Retrieves the user's list of favorite product IDs by userId. Returns a list of productId strings from FavoriteItemEntity. Returns empty list if no favorites exist."
         }
         addListOfFavoriteProducts(userId : String, productIds : String [0..-1]) {
-            spec "Adds products to the user's favorites list"
+            spec "Adds products to the user's favorites list by userId. Creates a FavoriteListEntity if it doesn't exist for the user. Creates a FavoriteItemEntity for each productId that isn't already in the list. Updates updatedAt."
         }
         removeProductFromFavorite(userId : String, productId : String) {
-            spec "Removes a product from the user's favorites list"
+            spec "Removes a product from the user's favorites list by userId and productId. Deletes the FavoriteItemEntity. Updates updatedAt on the FavoriteListEntity."
         }
     }
 
     @rest path="/api/v1/auth"
     interface AuthenticationService {
-        register(email : String, password : String) {
-            spec "Registers a new user account with email and password"
+        register(request : RegisterRequest) : AuthResponse {
+            spec "Registers a new user account. Creates a UserEntity with email, password (BCrypt-hashed), firstName, lastName, enabled=false, oauthUser=false. Creates a UserGrantedAuthority with authority=USER. Creates an AuthSessionEntity and generates JWT access and refresh tokens. Returns an AuthResponse with accessToken, refreshToken, userId."
         }
         confirmEmail(token : String) {
-            spec "Confirms a user's email address using a verification token"
+            spec "Confirms a user's email address using a verification token. Looks up an EmailTokenEntity by token with purpose=EMAIL_VERIFICATION that is not yet used and not expired. Sets the UserEntity.enabled=true. Marks the EmailTokenEntity.usedAt=now. Throws NotFoundException if token not found or already used."
         }
-        authenticate(email : String, password : String) {
-            spec "Authenticates a user with email and password, returns JWT tokens"
+        authenticate(email : String, password : String) : AuthResponse {
+            spec "Authenticates a user with email and password. Verifies the password against the stored BCrypt hash. Checks that enabled=true and accountNonLocked=true. Creates an AuthSessionEntity with refreshTokenHash, userAgent, ipAddress. Returns an AuthResponse with accessToken, refreshToken, userId. Throws BadCredentialsException on invalid credentials."
         }
-        refreshToken(refreshToken : String) {
-            spec "Refreshes an expired access token using a refresh token"
+        refreshToken(refreshToken : String) : AuthResponse {
+            spec "Refreshes an expired access token using a refresh token. Looks up the AuthSessionEntity by refreshTokenHash. Checks that it's not revoked or expired. Generates a new access token. Updates lastUsedAt. Returns an AuthResponse with new accessToken, same refreshToken, userId."
         }
         logout(refreshToken : String) {
-            spec "Revokes the current refresh token"
+            spec "Revokes the current refresh token. Looks up the AuthSessionEntity by refreshTokenHash and sets revokedAt=now. Throws NotFoundException if not found."
         }
         logoutAll(userId : String) {
-            spec "Revokes all active sessions for the authenticated user"
+            spec "Revokes all active sessions for the user by userId. Sets revokedAt=now on all AuthSessionEntity where userId matches and revokedAt is null."
         }
-        getSessions(userId : String) : String [0..-1] {
-            spec "Retrieves all active sessions for the authenticated user"
+        getSessions(userId : String) : AuthSessionSnapshot [0..-1] {
+            spec "Retrieves all active (non-revoked) sessions for the user by userId. Returns a list of AuthSessionSnapshot with id, userAgent, ipAddress, createdAt, lastUsedAt, expiresAt."
         }
         revokeSession(userId : String, sessionId : String) {
-            spec "Revokes a specific session by its ID"
+            spec "Revokes a specific session by sessionId. Verifies that the session belongs to the given userId. Sets revokedAt=now."
         }
         forgotPassword(email : String) {
-            spec "Sends a password reset email to the user"
+            spec "Sends a password reset email to the user. Looks up UserEntity by email. Creates an EmailTokenEntity with purpose=PASSWORD_RESET and a random token. (Email sending is out of scope - just create the token.) Throws NotFoundException if email not found."
         }
         changePassword(resetToken : String, newPassword : String) {
-            spec "Changes the user's password using a reset token"
+            spec "Changes the user's password using a reset token. Looks up an EmailTokenEntity by token with purpose=PASSWORD_RESET that is not yet used and not expired. Updates the UserEntity.password with BCrypt-hashed newPassword. Marks the EmailTokenEntity.usedAt=now."
         }
     }
 
     @rest path="/api/v1/auth/oauth"
     interface OAuthService {
-        initiateOAuth(provider : String) {
-            spec "Initiates the OAuth2 login flow for the specified provider"
+        initiateOAuth(provider : OAuthProvider) {
+            spec "Initiates the OAuth2 login flow for the specified provider. Builds the authorization URL with the provider's client ID, redirect URI, and scopes. Returns a redirect to the provider's authorization page."
         }
-        completeOAuthCallback(code : String, state : String) {
-            spec "Completes the OAuth2 login flow after provider callback"
+        completeOAuthCallback(code : String, state : String) : AuthResponse {
+            spec "Completes the OAuth2 login flow after provider callback. Exchanges the authorization code for an access token with the provider. Looks up the OAuthIdentityEntity by providerSubject. If it exists, loads the UserEntity. If not, creates a new UserEntity with oauthUser=true and a new OAuthIdentityEntity. Creates an AuthSessionEntity and returns an AuthResponse with JWT tokens."
         }
-        completeOAuthTokenHandoff(token : String) {
-            spec "Completes OAuth2 authentication via token handoff"
+        completeOAuthTokenHandoff(token : String) : AuthResponse {
+            spec "Completes OAuth2 authentication via token handoff. Validates the provided token with the provider. Looks up or creates the OAuthIdentityEntity and UserEntity. Creates an AuthSessionEntity and returns an AuthResponse with JWT tokens."
         }
     }
 
     @rest path="/api/v1/support-chat"
     interface SupportChatService {
-        getSupportChatStatus(userId : String) {
-            spec "Retrieves the availability status of support chat"
+        getSupportChatStatus(userId : String) : SupportChatStatusSnapshot {
+            spec "Retrieves the availability status of support chat for the user by userId. Returns a SupportChatStatusSnapshot with available=true and queuePosition if applicable."
         }
-        getCurrentSupportChatConversation(userId : String) {
-            spec "Retrieves the current support conversation for the user"
+        getCurrentSupportChatConversation(userId : String) : SupportConversationSnapshot {
+            spec "Retrieves the current support conversation for the user by userId. Returns a SupportConversationSnapshot with id, userId, createdAt, lastMessageAt. Returns null if no conversation exists."
         }
-        createSupportChatWebSocketTicket(userId : String) {
-            spec "Creates a WebSocket connection ticket for real-time chat"
+        createSupportChatWebSocketTicket(userId : String) : String {
+            spec "Creates a WebSocket connection ticket for real-time chat by userId. Returns a unique ticket string that can be used to authenticate the WebSocket connection."
         }
-        getSupportChatMessages(conversationId : String) : String [0..-1] {
-            spec "Retrieves messages for a support conversation with pagination"
+        getSupportChatMessages(conversationId : String) : SupportMessageSnapshot [0..-1] {
+            spec "Retrieves messages for a support conversation by conversationId. Returns a list of SupportMessageSnapshot with id, conversationId, senderType, body, deliveryStatus, createdAt. Sorted by createdAt ascending."
         }
-        sendSupportChatMessage(conversationId : String, message : String) {
-            spec "Sends a new message in a support conversation"
+        sendSupportChatMessage(conversationId : String, message : String) : SupportMessageSnapshot {
+            spec "Sends a new message in a support conversation by conversationId. Creates a SupportMessageEntity with senderType=CUSTOMER, body=message, normalizedBody=message, deliveryStatus=PENDING. Updates the SupportConversationEntity.lastMessageAt. Returns a SupportMessageSnapshot."
         }
     }
 }
