@@ -178,6 +178,36 @@ function inferEntitiesFromDTOs(
 }
 
 /**
+ * Infers entity types from the spec descriptions of operations.
+ * Scans for entity class names mentioned in the spec text.
+ */
+function inferEntitiesFromSpecs(
+    iface: Interface,
+    alreadyReferenced: Set<string>,
+): string[] {
+    const model = findRootModel(iface.$container as Package);
+    const allClasses = collectAllClasses(model);
+    const inferred = new Set<string>();
+
+    for (const op of iface.operations ?? []) {
+        const opNode = op as Operation;
+        const spec = opNode.description;
+        if (!spec) continue;
+
+        for (const cls of allClasses) {
+            if (alreadyReferenced.has(cls.name) || inferred.has(cls.name)) continue;
+            // Match the class name as a whole word
+            const regex = new RegExp(`\\b${cls.name}\\b`);
+            if (regex.test(spec)) {
+                inferred.add(cls.name);
+            }
+        }
+    }
+
+    return Array.from(inferred).sort();
+}
+
+/**
  * Infers entity types from the interface name itself.
  * E.g. "AdminOrderService" → "Order" → entity "Order"
  * E.g. "ProductReviewService" → "ProductReview" → entity "ProductReview"
@@ -421,8 +451,9 @@ export function generateService(
     const operations = (iface.operations ?? []) as Operation[];
     const directEntities = collectReferencedEntities(iface);
     const inferredFromDTOs = inferEntitiesFromDTOs(iface, new Set(directEntities));
-    const inferredFromName = inferEntitiesFromName(iface, new Set([...directEntities, ...inferredFromDTOs]));
-    const entities = [...directEntities, ...inferredFromDTOs, ...inferredFromName];
+    const inferredFromSpecs = inferEntitiesFromSpecs(iface, new Set([...directEntities, ...inferredFromDTOs]));
+    const inferredFromName = inferEntitiesFromName(iface, new Set([...directEntities, ...inferredFromDTOs, ...inferredFromSpecs]));
+    const entities = [...directEntities, ...inferredFromDTOs, ...inferredFromSpecs, ...inferredFromName];
     const mappingPairs = collectMappingPairs(iface);
 
     // Build repository field declarations and constructor params

@@ -72,21 +72,62 @@ function getHttpMapping(
 
     // ID param + DTO param, returns single → PUT /{id}
     if (params.length === 2 && firstType && secondType && hasReturn) {
-        return {
-            annotation: 'PutMapping',
-            path: '/{id}',
-            params: [
-                `@PathVariable ${firstType} ${params[0].name}`,
-                `@RequestBody @Valid ${secondType} ${params[1].name}`,
-            ],
-            responseWrap: 'single',
-        };
+        const secondParamIsDto = params[1]?.type?.ref?.$type === 'Class' || params[1]?.type?.ref?.$type === 'DataType';
+        if (secondParamIsDto) {
+            return {
+                annotation: 'PutMapping',
+                path: '/{id}',
+                params: [
+                    `@PathVariable ${firstType} ${params[0].name}`,
+                    `@RequestBody @Valid ${secondType} ${params[1].name}`,
+                ],
+                responseWrap: 'single',
+            };
+        }
     }
 
-    // Single ID param, void → DELETE /{id}
+    // ID param + DTO param, void → POST /{id} for create-like, PUT /{id} otherwise
+    if (params.length === 2 && firstType && secondType && !hasReturn) {
+        const secondParamIsDto = params[1]?.type?.ref?.$type === 'Class' || params[1]?.type?.ref?.$type === 'DataType';
+        if (secondParamIsDto) {
+            const isCreate = op.name.toLowerCase().startsWith('add') || op.name.toLowerCase().startsWith('create');
+            return {
+                annotation: isCreate ? 'PostMapping' : 'PutMapping',
+                path: '/{id}',
+                params: [
+                    `@PathVariable ${firstType} ${params[0].name}`,
+                    `@RequestBody @Valid ${secondType} ${params[1].name}`,
+                ],
+                responseWrap: 'void',
+            };
+        }
+    }
+
+    // ID param + collection param, void → POST /{id} for create-like, DELETE /{id} for delete-like, PUT otherwise
+    if (params.length === 2 && firstType && secondType && !hasReturn) {
+        const secondIsCollection = params[1].upper !== undefined && params[1].upper !== 1;
+        if (secondIsCollection) {
+            const isDelete = op.name.toLowerCase().startsWith('delete') || op.name.toLowerCase().startsWith('remove');
+            const isCreate = op.name.toLowerCase().startsWith('add') || op.name.toLowerCase().startsWith('create');
+            const annotation = isDelete ? 'DeleteMapping' : isCreate ? 'PostMapping' : 'PutMapping';
+            return {
+                annotation,
+                path: '/{id}',
+                params: [
+                    `@PathVariable ${firstType} ${params[0].name}`,
+                    `@RequestBody ${printSpringType(params[1])} ${params[1].name}`,
+                ],
+                responseWrap: 'void',
+            };
+        }
+    }
+
+    // Single ID param, void → DELETE /{id} for delete-like methods,
+    // PUT /{id} for other operations (e.g. setDefault, cancel, etc.)
     if (params.length === 1 && firstType && !hasReturn) {
+        const isDelete = op.name.toLowerCase().startsWith('delete') || op.name.toLowerCase().startsWith('remove');
         return {
-            annotation: 'DeleteMapping',
+            annotation: isDelete ? 'DeleteMapping' : 'PutMapping',
             path: '/{id}',
             params: [`@PathVariable ${firstType} ${params[0].name}`],
             responseWrap: 'void',

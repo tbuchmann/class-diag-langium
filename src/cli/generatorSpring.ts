@@ -467,7 +467,10 @@ export function generateJpaEntity(
     const hasSuperclassId = (clz.superClasses ?? []).some(
         sc => ((sc.ref?.properties ?? []) as Property[]).some(p => p.name === 'id'),
     );
-    const needsAutoId = !hasOwnId && !hasSuperclassId;
+    // @MappedSuperclass classes should not get an auto-generated id —
+    // their subclasses define their own id fields.
+    const isMappedSuperclassEarly = clz.abstract || getStereotype(clz) === 'mappedsuperclass';
+    const needsAutoId = !hasOwnId && !hasSuperclassId && !isMappedSuperclassEarly;
 
     // ---------- Import flags --------------------------------------------------
     const hasMultiOwn   = ownProps.some(p => p.upper !== undefined && p.upper !== 1);
@@ -500,14 +503,19 @@ export function generateJpaEntity(
     }
 
     // ---- Build field declarations ------------------------------------------
+    // Determine the Java type for the id field based on the model declaration.
+    // Falls back to Long when auto-generated (no explicit id property).
+    const idProp = (clz.properties as Property[]).find(p => p.name === 'id');
+    const idType = idProp ? printSpringType(idProp) : 'Long';
+
     const idBlock = needsAutoId
-        ? '    @Id\n    @GeneratedValue(strategy = GenerationType.IDENTITY)\n    private Long id;'
+        ? `    @Id\n    @GeneratedValue(strategy = GenerationType.IDENTITY)\n    private ${idType} id;`
         : '';
 
     const propFields = ownProps.map(p => {
         const notNull = p.lower !== undefined && p.lower >= 1 ? '    @NotNull\n' : '';
         if (p.name === 'id') {
-            return '    @Id\n    @GeneratedValue(strategy = GenerationType.IDENTITY)\n    private Long id;';
+            return `    @Id\n    @GeneratedValue(strategy = GenerationType.IDENTITY)\n    private ${idType} id;`;
         }
         switch (p.type?.ref?.$type) {
             case 'DataType':
@@ -523,7 +531,16 @@ export function generateJpaEntity(
         const jsonIgnoreLine = f.jsonIgnore ? '    @JsonIgnore\n' : '';
         const typeName = f.prop.type.ref?.name ?? '';
         const fieldType = f.isMulti ? `List<${typeName}>` : typeName;
-        return `${jsonIgnoreLine}    ${f.annotation}\n    private ${fieldType} ${f.prop.name};`;
+        // Check if a scalar property maps to the same column as the @JoinColumn
+        // (e.g. "conversation" → "conversation_id" matches "conversationId" → "conversation_id")
+        const joinColumnName = `${toSnakeCase(f.prop.name)}_id`;
+        const hasScalarOverlap = ownProps.some(p => toSnakeCase(p.name) === joinColumnName);
+        const annotation = hasScalarOverlap
+            ? f.annotation.replace(
+                /@JoinColumn\(name = "([^"]+)"\)/,
+                '@JoinColumn(name = "$1", insertable = false, updatable = false)')
+            : f.annotation;
+        return `${jsonIgnoreLine}    ${annotation}\n    private ${fieldType} ${f.prop.name};`;
     });
 
     const implicitFieldLines = implicitClassProps.map(p => {
@@ -535,11 +552,11 @@ export function generateJpaEntity(
 
     // ---- Build accessor declarations ----------------------------------------
     const autoIdAccessors = needsAutoId ? [
-        '    public Long getId() {',
+        `    public ${idType} getId() {`,
         '        return this.id;',
         '    }',
         '',
-        '    public void setId(Long id) {',
+        `    public void setId(${idType} id) {`,
         '        this.id = id;',
         '    }',
     ].join('\n') : '';
@@ -547,11 +564,11 @@ export function generateJpaEntity(
     const propAccessors    = ownProps.map(p => {
         if (p.name === 'id') {
             const capitalName = 'Id';
-            return `    public Long get${capitalName}() {
+            return `    public ${idType} get${capitalName}() {
         return this.id;
     }
 
-    public void set${capitalName}(Long id) {
+    public void set${capitalName}(${idType} id) {
         this.id = id;
     }`;
         }
@@ -633,13 +650,46 @@ export function generateSpringRepository(
 
     const qualifiedPkg = getQualifiedName(clz.$container as Package, '.');
 
+    // Determine the ID type from the model declaration
+    const idProp = (clz.properties as Property[]).find(p => p.name === 'id');
+    const idType = idProp ? printSpringType(idProp) : 'Long';
+
+    // Generate derived query methods for reference-typed fields
+    const props = clz.properties ?? [];
+    const queryMethods: string[] = [];
+    const seenMethodNames = new Set<string>();
+    // Fields that represent a parent reference → return List<T>
+    const listReturnFields = new Set(['userId', 'productId', 'orderId', 'conversationId', 'senderUserId']);
+    for (const prop of props) {
+        const typeName = prop.type?.ref?.name ?? '';
+        if (!typeName) continue;
+        // Skip 'id' — JpaRepository already provides findById
+        if (prop.name === 'id') continue;
+        // Generate findBy for fields ending in 'Id' or 'Email' or 'email'
+        const lowerName = prop.name.toLowerCase();
+        if (!lowerName.endsWith('id') && !lowerName.endsWith('email')) continue;
+        const capName = prop.name.charAt(0).toUpperCase() + prop.name.slice(1);
+        const methodName = `findBy${capName}`;
+        if (seenMethodNames.has(methodName)) continue;
+        seenMethodNames.add(methodName);
+        if (listReturnFields.has(prop.name)) {
+            queryMethods.push(`    java.util.List<${clz.name}> ${methodName}(${typeName} ${prop.name});`);
+        } else {
+            queryMethods.push(`    java.util.Optional<${clz.name}> ${methodName}(${typeName} ${prop.name});`);
+        }
+    }
+
+    const methodsBlock = queryMethods.length > 0
+        ? '\n' + queryMethods.join('\n') + '\n'
+        : '';
+
     const fileNode = expandToNode`
         package ${qualifiedPkg}.repository;
 
         import org.springframework.data.jpa.repository.JpaRepository;
         import ${qualifiedPkg}.domain.${clz.name};
 
-        public interface ${clz.name}Repository extends JpaRepository<${clz.name}, Long> {
+        public interface ${clz.name}Repository extends JpaRepository<${clz.name}, ${idType}> {${methodsBlock}
         }
     `.appendNewLineIfNotEmpty();
 

@@ -324,7 +324,7 @@ describe('generateJpaEntity', () => {
         expect(content).toContain('@GeneratedValue(strategy = GenerationType.IDENTITY)');
     });
 
-    test('explicit id property of type String is coerced to Long', async () => {
+    test('explicit id property of type String is preserved as String', async () => {
         const doc = await parse(`
             package shop {
                 primitive String
@@ -339,11 +339,11 @@ describe('generateJpaEntity', () => {
         const outFile = generateJpaEntity(clz, doc.parseResult.value, 'model.cdiag', tmpDir);
         const content = fs.readFileSync(outFile, 'utf-8');
 
-        expect(content).toContain('private Long id;');
-        expect(content).toContain('public Long getId() {');
-        expect(content).toContain('public void setId(Long id) {');
-        expect(content).not.toContain('public String getId()');
-        expect(content).not.toContain('public void setId(String');
+        expect(content).toContain('private String id;');
+        expect(content).toContain('public String getId() {');
+        expect(content).toContain('public void setId(String id) {');
+        expect(content).not.toContain('private Long id');
+        expect(content).not.toContain('public Long getId()');
     });
 
     test('PrimitiveType property gets @Column with snake_case name', async () => {
@@ -1309,8 +1309,8 @@ describe('Iteration 2 – Richer service generator', () => {
         // Custom operation has spec comment and @Transactional
         expect(content).toContain('@prompt Calculate discount based on order total');
         expect(content).toContain('@generated NOT');
-        expect(content).toContain('//generated start');
-        expect(content).toContain('//generated end');
+        expect(content).toContain('// generated start');
+        expect(content).toContain('// generated end');
 
         // @Transactional on save, deleteById, and the spec-annotated operation
         const transactionalCount = (content.match(/@Transactional/g) ?? []).length;
@@ -1338,8 +1338,8 @@ describe('Iteration 2 – Richer service generator', () => {
         // No repository injection
         expect(content).not.toContain('Repository');
         // Stub body
-        expect(content).toContain('//generated start');
-        expect(content).toContain('//generated end');
+        expect(content).toContain('// generated start');
+        expect(content).toContain('// generated end');
     });
 
     test('Service with multiple entity types injects multiple repositories', async () => {
