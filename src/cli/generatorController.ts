@@ -44,10 +44,25 @@ function getHttpMapping(
         return { annotation: 'GetMapping', path: '', params: [], responseWrap: 'collection' };
     }
 
+    // Single ID param (primitive type), returns collection → GET /{id}
+    if (params.length === 1 && firstType && hasReturn && isCollection) {
+        const paramRefType = params[0]?.type?.ref?.$type;
+        const paramIsCollection = params[0].upper !== undefined && params[0].upper !== 1;
+        if (paramRefType === 'PrimitiveType' && !paramIsCollection) {
+            return {
+                annotation: 'GetMapping',
+                path: '/{id}',
+                params: [`@PathVariable ${firstType} ${params[0].name}`],
+                responseWrap: 'collection',
+            };
+        }
+    }
+
     // Single ID param (primitive type), returns single → GET /{id}
     if (params.length === 1 && firstType && hasReturn && !isCollection) {
         const paramRefType = params[0]?.type?.ref?.$type;
-        if (paramRefType === 'PrimitiveType') {
+        const paramIsCollection = params[0].upper !== undefined && params[0].upper !== 1;
+        if (paramRefType === 'PrimitiveType' && !paramIsCollection) {
             return {
                 annotation: 'GetMapping',
                 path: '/{id}',
@@ -231,14 +246,28 @@ function buildControllerSource(target: ControllerTarget, delegateType: string, d
     lines.push('    }');
     lines.push('');
 
+    // Track used mapping keys to avoid ambiguous mappings
+    const usedMappings = new Set<string>();
+
     for (const op of target.operations) {
         const mapping = getHttpMapping(op);
         const returnType = op.type?.ref ? printSpringType(op) : 'void';
         const opParams = op.params ?? [];
 
         if (mapping) {
-            const methodParams = mapping.params.join(', ');
-            const pathAttr = mapping.path ? `("${mapping.path}")` : '';
+            // Check for duplicate mapping (same HTTP method + path)
+            const mappingKey = `${mapping.annotation}:${mapping.path}`;
+            let pathAttr = mapping.path ? `("${mapping.path}")` : '';
+            let methodParams = mapping.params.join(', ');
+            if (usedMappings.has(mappingKey)) {
+                // Disambiguate by using the method name + first param as path
+                const firstParam = opParams[0];
+                const dedupPath = firstParam ? `/${op.name}/{${firstParam.name}}` : `/${op.name}`;
+                pathAttr = `("${dedupPath}")`;
+                usedMappings.add(`${mapping.annotation}:${dedupPath}`);
+            } else {
+                usedMappings.add(mappingKey);
+            }
 
             let returnStmt: string;
             let actualReturnType: string;
@@ -268,12 +297,12 @@ function buildControllerSource(target: ControllerTarget, delegateType: string, d
             // Fallback for unmapped signatures
             const methodParams = opParams.map(p => `${printSpringType(p)} ${p.name}`).join(', ');
             const summary = camelToHuman(op.name);
-            lines.push(`    @GetMapping("/${op.name}")`);
+            const fallbackAnnotation = returnType === 'void' ? 'PostMapping' : 'GetMapping';
+            lines.push(`    @${fallbackAnnotation}("/${op.name}")`);
             lines.push(`    @Operation(summary = "${summary}")`);
             if ((op as any).preAuthorize) {
                 lines.push(`    @PreAuthorize(${(op as any).preAuthorize})`);
             }
-            lines.push(`    // TODO: review mapping for operation '${op.name}'`);
             lines.push(`    public ${returnType} ${op.name}(${methodParams}) {`);
             if (returnType === 'void') {
                 lines.push(`        ${delegateName}.${op.name}(${opParams.map(p => p.name).join(', ')});`);

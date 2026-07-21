@@ -654,24 +654,40 @@ export function generateSpringRepository(
     const idProp = (clz.properties as Property[]).find(p => p.name === 'id');
     const idType = idProp ? printSpringType(idProp) : 'Long';
 
-    // Generate derived query methods for reference-typed fields
+    // Generate derived query methods for all fields
     const props = clz.properties ?? [];
     const queryMethods: string[] = [];
     const seenMethodNames = new Set<string>();
+    const usedTypes = new Set<string>();
     // Fields that represent a parent reference → return List<T>
     const listReturnFields = new Set(['userId', 'productId', 'orderId', 'conversationId', 'senderUserId']);
     for (const prop of props) {
-        const typeName = prop.type?.ref?.name ?? '';
+        const typeName = printSpringType(prop);
         if (!typeName) continue;
         // Skip 'id' — JpaRepository already provides findById
         if (prop.name === 'id') continue;
-        // Generate findBy for fields ending in 'Id' or 'Email' or 'email'
-        const lowerName = prop.name.toLowerCase();
-        if (!lowerName.endsWith('id') && !lowerName.endsWith('email')) continue;
         const capName = prop.name.charAt(0).toUpperCase() + prop.name.slice(1);
+
+        // Boolean fields → findBy<Field>True / findBy<Field>False returning List
+        if (typeName === 'Boolean') {
+            const trueMethod = `findBy${capName}True`;
+            const falseMethod = `findBy${capName}False`;
+            if (!seenMethodNames.has(trueMethod)) {
+                seenMethodNames.add(trueMethod);
+                queryMethods.push(`    java.util.List<${clz.name}> ${trueMethod}();`);
+            }
+            if (!seenMethodNames.has(falseMethod)) {
+                seenMethodNames.add(falseMethod);
+                queryMethods.push(`    java.util.List<${clz.name}> ${falseMethod}();`);
+            }
+            continue;
+        }
+
+        // Generate findBy for all other fields
         const methodName = `findBy${capName}`;
         if (seenMethodNames.has(methodName)) continue;
         seenMethodNames.add(methodName);
+        usedTypes.add(typeName);
         if (listReturnFields.has(prop.name)) {
             queryMethods.push(`    java.util.List<${clz.name}> ${methodName}(${typeName} ${prop.name});`);
         } else {
@@ -683,11 +699,24 @@ export function generateSpringRepository(
         ? '\n' + queryMethods.join('\n') + '\n'
         : '';
 
+    // Imports for types used in findBy methods
+    const typeImports: string[] = [];
+    if (usedTypes.has('LocalDate')) typeImports.push('java.time.LocalDate');
+    if (usedTypes.has('LocalDateTime')) typeImports.push('java.time.LocalDateTime');
+    if (usedTypes.has('BigDecimal')) typeImports.push('java.math.BigDecimal');
+    // Imports for our own domain types (enums, embeddables, etc.)
+    const domainImports = collectTypeImports(props, clz.$container as Package, 'repository')
+        .filter(imp => !imp.endsWith(`.domain.${clz.name};`));
+    const allImports = [...typeImports.map(t => `import ${t};`), ...domainImports]
+        .sort()
+        .join('\n');
+
     const fileNode = expandToNode`
         package ${qualifiedPkg}.repository;
 
         import org.springframework.data.jpa.repository.JpaRepository;
         import ${qualifiedPkg}.domain.${clz.name};
+        ${allImports}
 
         public interface ${clz.name}Repository extends JpaRepository<${clz.name}, ${idType}> {${methodsBlock}
         }

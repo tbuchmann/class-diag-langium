@@ -36,7 +36,7 @@ package icedlatte {
 
     enum PaymentStatus {
         CREATED, STRIPE_SESSION_CREATED, AWAITING_ASYNC_CONFIRMATION,
-        PAID, FAILED, EXPIRED, REFUNDED, RECONCILIATION_FAILED
+        PAID, FAILED, EXPIRED, REFUNDED, RECONCILIATION_FAILED, CANCELED, PROCESSING, REQUIRES_ACTION
     }
 
     enum PaymentProvider {
@@ -77,7 +77,6 @@ package icedlatte {
     // DTOs (data transfer records)
     // ------------------------------------------------------------------
     @dto datatype ProductSnapshot {
-        id : Long
         name : String
         description : String
         price : Decimal
@@ -91,7 +90,6 @@ package icedlatte {
     }
 
     @dto datatype CartSnapshot {
-        id : Long
         userId : Long
         itemsQuantity : Integer
         itemsTotalPrice : Decimal
@@ -100,7 +98,6 @@ package icedlatte {
     }
 
     @dto datatype CartItemSnapshot {
-        id : Long
         productId : Long
         productQuantity : Integer
     }
@@ -125,7 +122,6 @@ package icedlatte {
     }
 
     @dto datatype OrderSnapshot {
-        id : Long
         userId : Long
         status : OrderStatus
         recipientName : String
@@ -136,7 +132,6 @@ package icedlatte {
     }
 
     @dto datatype OrderItemSnapshot {
-        id : Long
         productId : Long
         productName : String
         productPrice : Decimal
@@ -144,7 +139,6 @@ package icedlatte {
     }
 
     @dto datatype OrderStatusHistorySnapshot {
-        id : Long
         oldStatus : OrderStatus
         newStatus : OrderStatus
         changedBy : String
@@ -153,14 +147,12 @@ package icedlatte {
     }
 
     @dto datatype UserLookupSnapshot {
-        id : Long
         firstName : String
         lastName : String
         email : String
     }
 
     @dto datatype CurrentUserSnapshot {
-        id : Long
         email : String
         displayName : String
     }
@@ -183,7 +175,6 @@ package icedlatte {
     }
 
     @dto datatype AuthSessionSnapshot {
-        id : Long
         userAgent : String
         ipAddress : String
         createdAt : DateTime
@@ -220,7 +211,6 @@ package icedlatte {
     }
 
     @dto datatype DeliveryAddressSnapshot {
-        id : Long
         label : String
         line : String
         city : String
@@ -230,7 +220,6 @@ package icedlatte {
     }
 
     @dto datatype ProductReviewSnapshot {
-        id : Long
         userId : Long
         productId : Long
         text : String
@@ -251,14 +240,12 @@ package icedlatte {
     }
 
     @dto datatype SupportConversationSnapshot {
-        id : Long
         userId : Long
         createdAt : DateTime
         lastMessageAt : DateTime
     }
 
     @dto datatype SupportMessageSnapshot {
-        id : Long
         conversationId : Long
         senderType : SupportMessageSenderType
         body : String
@@ -269,6 +256,49 @@ package icedlatte {
     @dto datatype CheckoutStatusSnapshot {
         status : PaymentStatus
         providerSessionId : String
+    }
+
+    @dto datatype LoginRequest {
+        email : String [1..1]
+        password : String [1..1]
+    }
+
+    @dto datatype ResetPasswordRequest {
+        resetToken : String [1..1]
+        newPassword : String [1..1]
+    }
+
+    @dto datatype RevokeSessionRequest {
+        sessionId : Long [1..1]
+    }
+
+    @dto datatype OAuthCallbackRequest {
+        code : String [1..1]
+        state : String [1..1]
+    }
+
+    @dto datatype UpdateCartItemRequest {
+        itemId : Long [1..1]
+        quantity : Integer [1..1]
+    }
+
+    @dto datatype AddProductReviewRequest {
+        userId : Long [1..1]
+        text : String [1..1]
+        rating : Integer [1..1]
+    }
+
+    @dto datatype AddProductReviewLikeRequest {
+        userId : Long [1..1]
+        isLike : Boolean [1..1]
+    }
+
+    @dto datatype GetProductReviewRequest {
+        userId : Long [1..1]
+    }
+
+    @dto datatype DeleteProductReviewRequest {
+        productReviewId : Long [1..1]
     }
 
     // ------------------------------------------------------------------
@@ -285,7 +315,6 @@ package icedlatte {
     // User domain entities
     // ------------------------------------------------------------------
     class UserEntity extends AuditableEntity {
-        id : Long [1..1]
         firstName : String [1..1]
         lastName : String [1..1]
         birthDate : Date
@@ -301,7 +330,6 @@ package icedlatte {
     }
 
     class Address {
-        addressId : Long [1..1]
         country : String [1..1]
         city : String [1..1]
         line : String [1..1]
@@ -309,12 +337,10 @@ package icedlatte {
     }
 
     class UserGrantedAuthority {
-        userAuthorityId : Long [1..1]
         authority : Authority [1..1]
     }
 
     class DeliveryAddressEntity {
-        id : Long [1..1]
         label : String [1..1]
         line : String [1..1]
         city : String [1..1]
@@ -324,7 +350,6 @@ package icedlatte {
     }
 
     class UserAvatarUpload {
-        id : Long [1..1]
         userId : Long [1..1]
         status : UserAvatarUploadStatus [1..1]
         originalBucket : String
@@ -362,7 +387,6 @@ package icedlatte {
     // Product catalog entities
     // ------------------------------------------------------------------
     class ProductInfo extends AuditableEntity {
-        id : Long [1..1]
         version : Long [1..1]
         name : String [1..1]
         description : String [1..1]
@@ -386,7 +410,6 @@ package icedlatte {
     }
 
     class ProductImage {
-        id : Long [1..1]
         productId : Long [1..1]
         url : String [1..1]
         position : Integer [1..1]
@@ -396,7 +419,6 @@ package icedlatte {
     // Shopping cart entities
     // ------------------------------------------------------------------
     class ShoppingCart {
-        id : Long [1..1]
         userId : Long [1..1]
         createdAt : DateTime [1..1]
         closedAt : DateTime
@@ -406,7 +428,6 @@ package icedlatte {
     }
 
     class ShoppingCartItem {
-        id : Long [1..1]
         version : Integer [1..1]
         productId : Long [1..1]
         productQuantity : Integer [1..1]
@@ -421,7 +442,6 @@ package icedlatte {
     // Order entities
     // ------------------------------------------------------------------
     class Order extends AuditableEntity {
-        id : Long [1..1]
         userId : Long [1..1]
         sessionId : Long [1..1]
         status : OrderStatus [1..1]
@@ -439,7 +459,6 @@ package icedlatte {
     }
 
     class OrderItem {
-        id : Long [1..1]
         orderId : Long [1..1]
         productId : Long
         productPrice : Decimal
@@ -448,7 +467,6 @@ package icedlatte {
     }
 
     class OrderAddress {
-        addressId : Long [1..1]
         country : String [1..1]
         city : String [1..1]
         line : String [1..1]
@@ -456,7 +474,6 @@ package icedlatte {
     }
 
     class OrderStatusHistory {
-        id : Long [1..1]
         orderId : Long [1..1]
         oldStatus : OrderStatus
         newStatus : OrderStatus [1..1]
@@ -484,7 +501,6 @@ package icedlatte {
     // Payment entities
     // ------------------------------------------------------------------
     class Payment extends AuditableEntity {
-        id : Long [1..1]
         orderId : Long [1..1]
         userId : Long [1..1]
         provider : PaymentProvider [1..1]
@@ -511,7 +527,6 @@ package icedlatte {
     // Review entities
     // ------------------------------------------------------------------
     class ProductReview {
-        id : Long [1..1]
         userId : Long [1..1]
         productId : Long
         createdAt : DateTime
@@ -522,7 +537,6 @@ package icedlatte {
     }
 
     class ProductReviewLike {
-        id : Long [1..1]
         productReviewId : Long [1..1]
         productId : Long [1..1]
         userId : Long [1..1]
@@ -533,13 +547,11 @@ package icedlatte {
     // Favorites entities
     // ------------------------------------------------------------------
     class FavoriteListEntity {
-        id : Long [1..1]
         userId : Long [1..1]
         updatedAt : DateTime
     }
 
     class FavoriteItemEntity {
-        id : Long [1..1]
         version : Integer [1..1]
         productId : Long [1..1]
     }
@@ -553,7 +565,6 @@ package icedlatte {
     // Security entities
     // ------------------------------------------------------------------
     class AuthSessionEntity {
-        id : Long [1..1]
         userId : Long [1..1]
         refreshTokenHash : String [1..1]
         previousTokenHash : String
@@ -567,7 +578,6 @@ package icedlatte {
     }
 
     class LoginAttemptEntity {
-        id : Long [1..1]
         userEmail : String [1..1]
         attempts : Integer [1..1]
         expirationDatetime : DateTime
@@ -576,7 +586,6 @@ package icedlatte {
     }
 
     class EmailTokenEntity {
-        id : Long [1..1]
         userId : Long [1..1]
         token : String [1..1]
         purpose : TokenPurpose [1..1]
@@ -585,7 +594,6 @@ package icedlatte {
     }
 
     class OAuthIdentityEntity extends AuditableEntity {
-        id : Long [1..1]
         userId : Long [1..1]
         provider : OAuthProvider [1..1]
         providerSubject : String [1..1]
@@ -596,7 +604,6 @@ package icedlatte {
     // Support chat entities
     // ------------------------------------------------------------------
     class SupportConversationEntity {
-        id : Long [1..1]
         userId : Long [1..1]
         createdAt : DateTime
         updatedAt : DateTime
@@ -606,7 +613,6 @@ package icedlatte {
     }
 
     class SupportMessageEntity {
-        id : Long [1..1]
         conversationId : Long [1..1]
         senderType : SupportMessageSenderType [1..1]
         senderUserId : Long
@@ -717,8 +723,8 @@ package icedlatte {
         addNewItemToShoppingCart(userId : Long, request : AddCartItemRequest) {
             spec "Adds an item to the user's cart by userId. If a ShoppingCartItem with the same productId already exists, increments productQuantity by request.productQuantity. Otherwise creates a new ShoppingCartItem. Recalculates itemsQuantity and itemsTotalPrice."
         }
-        updateProductQuantityInShoppingCartItem(userId : Long, itemId : String, quantity : Integer) {
-            spec "Updates the quantity of a cart item by itemId. If quantity is 0, removes the item. Recalculates itemsQuantity and itemsTotalPrice for the cart."
+        updateProductQuantityInShoppingCartItem(userId : Long, request : UpdateCartItemRequest) {
+            spec "Updates the quantity of a cart item. The 'userId' parameter is the user's ID, 'request' contains itemId and quantity. If quantity is 0, removes the item. Recalculates itemsQuantity and itemsTotalPrice for the cart."
         }
         deleteItemsFromShoppingCart(userId : Long, itemIds : Long [0..-1]) {
             spec "Removes the specified items by their IDs from the user's cart. Recalculates itemsQuantity and itemsTotalPrice."
@@ -776,7 +782,7 @@ package icedlatte {
         }
     }
 
-    @rest path="/api/v1/products"
+    @rest path="/api/v1/products/reviews"
     interface ProductReviewService {
         getProductReviewsAndRatings(productId : Long) : ProductReviewSnapshot [0..-1] {
             spec "Retrieves all reviews for a product by productId. Returns a list of ProductReviewSnapshot with id, userId, productId, text, productRating, likesCount, dislikesCount, createdAt. Sorted by createdAt descending."
@@ -784,20 +790,20 @@ package icedlatte {
         getRatingAndReviewStat(productId : Long) : RatingSummarySnapshot {
             spec "Retrieves aggregated rating statistics for a product by productId. Returns a RatingSummarySnapshot with averageRating and reviewsCount. Returns zeros if no reviews exist."
         }
-        addNewProductReview(productId : Long, userId : Long, text : String, rating : Integer) : ProductReviewSnapshot {
-            spec "Adds a new review for a product by productId. Checks that the user hasn't already reviewed this product. Creates a ProductReview with userId, productId, text, productRating=rating, likesCount=0, dislikesCount=0. Updates ProductInfo.averageRating and reviewsCount. Returns a ProductReviewSnapshot."
+        addNewProductReview(productId : Long, request : AddProductReviewRequest) : ProductReviewSnapshot {
+            spec "Adds a new review for a product by productId. The 'request' parameter contains userId, text, and rating. Checks that the user hasn't already reviewed this product. Creates a ProductReview with userId, productId, text, productRating=rating, likesCount=0, dislikesCount=0. Updates ProductInfo.averageRating and reviewsCount. Returns a ProductReviewSnapshot."
         }
-        deleteProductReview(productId : Long, productReviewId : Long) {
-            spec "Deletes a product review by productReviewId. Verifies that the review belongs to the given productId. Updates ProductInfo.averageRating and reviewsCount after deletion. Also deletes all ProductReviewLike for this review."
+        deleteProductReview(productId : Long, request : DeleteProductReviewRequest) {
+            spec "Deletes a product review. The 'productId' parameter is the product ID, 'request' contains productReviewId. Verifies that the review belongs to the given productId. Updates ProductInfo.averageRating and reviewsCount after deletion. Also deletes all ProductReviewLike for this review."
         }
-        getProductReview(productId : Long, userId : Long) : ProductReviewSnapshot {
-            spec "Retrieves the user's review for a product by productId and userId. Returns a ProductReviewSnapshot. Returns null if the user hasn't reviewed this product."
+        getProductReview(productId : Long, request : GetProductReviewRequest) : ProductReviewSnapshot {
+            spec "Retrieves the user's review for a product. The 'productId' parameter is the product ID, 'request' contains userId. Returns a ProductReviewSnapshot. Returns null if the user hasn't reviewed this product."
         }
         getUserReviews(userId : Long) : ProductReviewSnapshot [0..-1] {
             spec "Retrieves all reviews written by a user by userId. Returns a list of ProductReviewSnapshot. Sorted by createdAt descending."
         }
-        addProductReviewLike(productId : Long, productReviewId : Long, userId : Long, isLike : Boolean) {
-            spec "Adds or updates a like/dislike on a product review by productReviewId. If a ProductReviewLike already exists for the same userId and review, updates isLike. Otherwise creates a new one. Increments likesCount or dislikesCount on the ProductReview accordingly. If toggling from like to dislike, decrements likesCount and increments dislikesCount."
+        addProductReviewLike(productId : Long, request : AddProductReviewLikeRequest) {
+            spec "Adds or updates a like/dislike on a product review. The 'request' parameter contains userId and isLike. If a ProductReviewLike already exists for the same userId and review, updates isLike. Otherwise creates a new one. Increments likesCount or dislikesCount on the ProductReview accordingly. If toggling from like to dislike, decrements likesCount and increments dislikesCount."
         }
     }
 
@@ -822,8 +828,8 @@ package icedlatte {
         confirmEmail(token : String) {
             spec "Confirms a user's email address using a verification token. The 'token' parameter is the verification token string. Looks up an EmailTokenEntity by token with purpose=EMAIL_VERIFICATION that is not yet used and not expired. Sets the UserEntity.enabled=true. Marks the EmailTokenEntity.usedAt=now. Throws NotFoundException if token not found or already used."
         }
-        authenticate(email : String, password : String) : AuthResponse {
-            spec "Authenticates a user with email and password. The 'email' parameter is the user's email, 'password' is the raw password. Verifies the password against the stored BCrypt hash. Checks that enabled=true and accountNonLocked=true. Creates an AuthSessionEntity with refreshTokenHash, userAgent, ipAddress. Returns an AuthResponse with accessToken, refreshToken, userId. Throws BadCredentialsException on invalid credentials."
+        authenticate(request : LoginRequest) : AuthResponse {
+            spec "Authenticates a user with email and password. The 'request' parameter contains email and password. Verifies the password against the stored BCrypt hash. Checks that enabled=true and accountNonLocked=true. Creates an AuthSessionEntity with refreshTokenHash, userAgent, ipAddress. Returns an AuthResponse with accessToken, refreshToken, userId. Throws BadCredentialsException on invalid credentials."
         }
         refreshToken(refreshToken : String) : AuthResponse {
             spec "Refreshes an expired access token using a refresh token. The 'refreshToken' parameter is the refresh token string. Looks up the AuthSessionEntity by refreshTokenHash. Checks that it's not revoked or expired. Generates a new access token. Updates lastUsedAt. Returns an AuthResponse with new accessToken, same refreshToken, userId."
@@ -837,14 +843,14 @@ package icedlatte {
         getSessions(userId : Long) : AuthSessionSnapshot [0..-1] {
             spec "Retrieves all active (non-revoked) sessions for the user by userId. The 'userId' parameter is the user's ID. Returns a list of AuthSessionSnapshot with id, userAgent, ipAddress, createdAt, lastUsedAt, expiresAt."
         }
-        revokeSession(userId : Long, sessionId : Long) {
-            spec "Revokes a specific session by sessionId. The 'userId' parameter is the user's ID, 'sessionId' is the session ID. Verifies that the session belongs to the given userId. Sets revokedAt=now. Does not return anything (void)."
+        revokeSession(userId : Long, request : RevokeSessionRequest) {
+            spec "Revokes a specific session. The 'userId' parameter is the user's ID, 'request' contains sessionId. Verifies that the session belongs to the given userId. Sets revokedAt=now. Does not return anything (void)."
         }
         forgotPassword(email : String) {
             spec "Sends a password reset email to the user. The 'email' parameter is the user's email. Looks up UserEntity by email. Creates an EmailTokenEntity with purpose=PASSWORD_RESET and a random token. (Email sending is out of scope - just create the token.) Throws NotFoundException if email not found. Does not return anything (void)."
         }
-        changePassword(resetToken : String, newPassword : String) {
-            spec "Changes the user's password using a reset token. The 'resetToken' parameter is the password reset token, 'newPassword' is the new raw password. Looks up an EmailTokenEntity by token with purpose=PASSWORD_RESET that is not yet used and not expired. Updates the UserEntity.password with BCrypt-hashed newPassword. Marks the EmailTokenEntity.usedAt=now. Does not return anything (void)."
+        changePassword(request : ResetPasswordRequest) {
+            spec "Changes the user's password using a reset token. The 'request' parameter contains resetToken and newPassword. Looks up an EmailTokenEntity by token with purpose=PASSWORD_RESET that is not yet used and not expired. Updates the UserEntity.password with BCrypt-hashed newPassword. Marks the EmailTokenEntity.usedAt=now. Does not return anything (void)."
         }
     }
 
@@ -853,8 +859,8 @@ package icedlatte {
         initiateOAuth(provider : OAuthProvider) {
             spec "Initiates the OAuth2 login flow for the specified provider. Builds the authorization URL with the provider's client ID, redirect URI, and scopes. Returns a redirect to the provider's authorization page."
         }
-        completeOAuthCallback(code : String, state : String) : AuthResponse {
-            spec "Completes the OAuth2 login flow after provider callback. Exchanges the authorization code for an access token with the provider. Looks up the OAuthIdentityEntity by providerSubject. If it exists, loads the UserEntity. If not, creates a new UserEntity with oauthUser=true and a new OAuthIdentityEntity. Creates an AuthSessionEntity and returns an AuthResponse with JWT tokens."
+        completeOAuthCallback(request : OAuthCallbackRequest) : AuthResponse {
+            spec "Completes the OAuth2 login flow after provider callback. The 'request' parameter contains code and state. Exchanges the authorization code for an access token with the provider. Looks up the OAuthIdentityEntity by providerSubject. If it exists, loads the UserEntity. If not, creates a new UserEntity with oauthUser=true and a new OAuthIdentityEntity. Creates an AuthSessionEntity and returns an AuthResponse with JWT tokens."
         }
         completeOAuthTokenHandoff(token : String) : AuthResponse {
             spec "Completes OAuth2 authentication via token handoff. Validates the provided token with the provider. Looks up or creates the OAuthIdentityEntity and UserEntity. Creates an AuthSessionEntity and returns an AuthResponse with JWT tokens."
