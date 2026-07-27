@@ -903,7 +903,8 @@ export function generateSecurityConfig(
     const rootPkg = model.packages[0];
     if (!rootPkg) return '';
     const qualifiedPkg = getQualifiedName(rootPkg, '.');
-    const data = extractDestinationAndName(filePath, `${destination}/${qualifiedPkg.replace(/\./g, '/')}/config`);
+    const pkgPath = getQualifiedName(rootPkg, '/', true);
+    const data = extractDestinationAndName(filePath, `${destination}${pkgPath ? '/' + pkgPath : ''}/config`);
     const generatedFilePath = path.join(data.destination, 'SecurityConfig.java');
 
     const fileNode = expandToNode`
@@ -915,20 +916,189 @@ export function generateSecurityConfig(
         import org.springframework.security.config.annotation.web.builders.HttpSecurity;
         import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
         import org.springframework.security.web.SecurityFilterChain;
+        import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
+        import org.springframework.security.crypto.password.PasswordEncoder;
+        import org.springframework.security.authentication.AuthenticationManager;
+        import org.springframework.security.config.annotation.authentication.configuration.AuthenticationConfiguration;
+        import ${qualifiedPkg}.config.jwt.JwtAuthenticationFilter;
 
         @Configuration
         @EnableWebSecurity
         @EnableMethodSecurity
         public class SecurityConfig {
 
+            private final JwtAuthenticationFilter jwtAuthenticationFilter;
+
+            public SecurityConfig(JwtAuthenticationFilter jwtAuthenticationFilter) {
+                this.jwtAuthenticationFilter = jwtAuthenticationFilter;
+            }
+
             @Bean
             public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
                 http
                     .authorizeHttpRequests(auth -> auth
+                        .requestMatchers("/swagger-ui/**").permitAll()
+                        .requestMatchers("/v3/api-docs/**").permitAll()
+                        .requestMatchers("/swagger-ui.html").permitAll()
                         .anyRequest().authenticated()
                     )
-                    .csrf(csrf -> csrf.disable());
+                    .csrf(csrf -> csrf.disable())
+                    .addFilterBefore(jwtAuthenticationFilter, org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter.class);
                 return http.build();
+            }
+
+            @Bean
+            public PasswordEncoder passwordEncoder() {
+                return new BCryptPasswordEncoder();
+            }
+
+            @Bean
+            public AuthenticationManager authenticationManager(AuthenticationConfiguration config) throws Exception {
+                return config.getAuthenticationManager();
+            }
+        }
+    `.appendNewLineIfNotEmpty();
+
+    if (!fs.existsSync(data.destination)) {
+        fs.mkdirSync(data.destination, { recursive: true });
+    }
+    fs.writeFileSync(generatedFilePath, toString(fileNode));
+    return generatedFilePath;
+}
+
+// ---------------------------------------------------------------------------
+// JwtTokenProvider generator
+// ---------------------------------------------------------------------------
+
+export function generateJwtTokenProvider(
+    model: Model,
+    filePath: string,
+    destination: string | undefined,
+): string {
+    const rootPkg = model.packages[0];
+    if (!rootPkg) return '';
+    const qualifiedPkg = getQualifiedName(rootPkg, '.');
+    const pkgPath = getQualifiedName(rootPkg, '/', true);
+    const data = extractDestinationAndName(filePath, `${destination}${pkgPath ? '/' + pkgPath : ''}/config/jwt`);
+    const generatedFilePath = path.join(data.destination, 'JwtTokenProvider.java');
+
+    const fileNode = expandToNode`
+        package ${qualifiedPkg}.config.jwt;
+
+        import org.springframework.beans.factory.annotation.Value;
+        import org.springframework.stereotype.Component;
+        import io.jsonwebtoken.Jwts;
+        import io.jsonwebtoken.security.Keys;
+        import javax.crypto.SecretKey;
+        import java.util.Date;
+
+        @Component
+        public class JwtTokenProvider {
+
+            @Value("\${jwt.secret:ZmFkZGY0ZDhmZDhmOWE5OWY5OWY5OWY5OWY5OWY5OWY5OWY5OWY5OWY5OWY5OWY="}")
+            private String secret;
+
+            @Value("\${jwt.expiration:86400000}")
+            private long expirationMs;
+
+            private SecretKey key() {
+                return Keys.hmacShaKeyFor(java.util.Base64.getDecoder().decode(secret));
+            }
+
+            public String generateToken(Long userId, String email) {
+                Date now = new Date();
+                Date expiry = new Date(now.getTime() + expirationMs);
+                return Jwts.builder()
+                    .subject(String.valueOf(userId))
+                    .claim("email", email)
+                    .issuedAt(now)
+                    .expiration(expiry)
+                    .signWith(key())
+                    .compact();
+            }
+
+            public Long getUserIdFromToken(String token) {
+                return Long.parseLong(Jwts.parser()
+                    .verifyWith(key())
+                    .build()
+                    .parseSignedClaims(token)
+                    .getPayload()
+                    .getSubject());
+            }
+
+            public boolean validateToken(String token) {
+                try {
+                    Jwts.parser().verifyWith(key()).build().parseSignedClaims(token);
+                    return true;
+                } catch (Exception e) {
+                    return false;
+                }
+            }
+        }
+    `.appendNewLineIfNotEmpty();
+
+    if (!fs.existsSync(data.destination)) {
+        fs.mkdirSync(data.destination, { recursive: true });
+    }
+    fs.writeFileSync(generatedFilePath, toString(fileNode));
+    return generatedFilePath;
+}
+
+// ---------------------------------------------------------------------------
+// JwtAuthenticationFilter generator
+// ---------------------------------------------------------------------------
+
+export function generateJwtAuthenticationFilter(
+    model: Model,
+    filePath: string,
+    destination: string | undefined,
+): string {
+    const rootPkg = model.packages[0];
+    if (!rootPkg) return '';
+    const qualifiedPkg = getQualifiedName(rootPkg, '.');
+    const pkgPath = getQualifiedName(rootPkg, '/', true);
+    const data = extractDestinationAndName(filePath, `${destination}${pkgPath ? '/' + pkgPath : ''}/config/jwt`);
+    const generatedFilePath = path.join(data.destination, 'JwtAuthenticationFilter.java');
+
+    const fileNode = expandToNode`
+        package ${qualifiedPkg}.config.jwt;
+
+        import org.springframework.http.HttpHeaders;
+        import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+        import org.springframework.security.core.authority.SimpleGrantedAuthority;
+        import org.springframework.security.core.context.SecurityContextHolder;
+        import org.springframework.stereotype.Component;
+        import org.springframework.web.filter.OncePerRequestFilter;
+        import jakarta.servlet.FilterChain;
+        import jakarta.servlet.ServletException;
+        import jakarta.servlet.http.HttpServletRequest;
+        import jakarta.servlet.http.HttpServletResponse;
+        import java.io.IOException;
+        import java.util.List;
+
+        @Component
+        public class JwtAuthenticationFilter extends OncePerRequestFilter {
+
+            private final JwtTokenProvider jwtTokenProvider;
+
+            public JwtAuthenticationFilter(JwtTokenProvider jwtTokenProvider) {
+                this.jwtTokenProvider = jwtTokenProvider;
+            }
+
+            @Override
+            protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain)
+                    throws ServletException, IOException {
+                String header = request.getHeader(HttpHeaders.AUTHORIZATION);
+                if (header != null && header.startsWith("Bearer ")) {
+                    String token = header.substring(7);
+                    if (jwtTokenProvider.validateToken(token)) {
+                        Long userId = jwtTokenProvider.getUserIdFromToken(token);
+                        UsernamePasswordAuthenticationToken auth = new UsernamePasswordAuthenticationToken(
+                            userId, null, List.of(new SimpleGrantedAuthority("ROLE_USER")));
+                        SecurityContextHolder.getContext().setAuthentication(auth);
+                    }
+                }
+                filterChain.doFilter(request, response);
             }
         }
     `.appendNewLineIfNotEmpty();
@@ -1002,17 +1172,10 @@ export function generateSpringCode(
         }
     });
 
-    // Generate SecurityConfig if any operation has preAuthorize
-    const hasSecurity = allTypes.some(t => {
-        if (t.$type === 'Interface' || t.$type === 'Class') {
-            const ops = (t as any).operations ?? [];
-            return ops.some((o: any) => o.preAuthorize);
-        }
-        return false;
-    });
-    if (hasSecurity) {
-        generateSecurityConfig(model, filePath, destination);
-    }
+    // Generate SecurityConfig and JWT helpers always
+    generateSecurityConfig(model, filePath, destination);
+    generateJwtTokenProvider(model, filePath, destination);
+    generateJwtAuthenticationFilter(model, filePath, destination);
 
     return destination ?? '';
 }

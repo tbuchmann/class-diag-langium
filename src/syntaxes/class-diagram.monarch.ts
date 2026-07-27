@@ -1,7 +1,7 @@
 // Monarch syntax highlighting for the class-diagram language.
 export default {
     keywords: [
-        '@rest','abstract','assoc','class','composite','datatype','enum','extends','impl','implements','interface','none','package','path','preAuthorize','primitive','private','protected','public','shared','spec','static','x'
+        '@rest','DELETE','GET','PATCH','POST','PUT','abstract','assoc','class','composite','datatype','enum','extends','http','impl','implements','interface','none','package','path','preAuthorize','primitive','private','protected','public','shared','spec','static','x'
     ],
     operators: [
         ',','..','/',':','='

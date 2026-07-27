@@ -30,6 +30,20 @@ function collectEntityNames(ops: Operation[]): string[] {
     return Array.from(names).sort();
 }
 
+function inferHttpMethod(op: Operation): string {
+    if (op.httpMethod) return op.httpMethod;
+    const name = op.name.toLowerCase();
+    if (name.startsWith('get') || name.startsWith('find')) return 'GET';
+    if (name.startsWith('add') || name.startsWith('create') || name.startsWith('register')) return 'POST';
+    if (name.startsWith('delete') || name.startsWith('remove')) return 'DELETE';
+    if (name.startsWith('update') || name.startsWith('edit') || name.startsWith('change') || name.startsWith('set')) return 'PUT';
+    return 'POST';
+}
+
+function toAnnotation(method: string): string {
+    return method.charAt(0) + method.slice(1).toLowerCase() + 'Mapping';
+}
+
 function getHttpMapping(
     op: Operation,
 ): { annotation: string; path: string; params: string[]; responseWrap: string } | undefined {
@@ -38,122 +52,69 @@ function getHttpMapping(
     const isCollection = op.upper !== undefined && op.upper !== 1;
     const firstType = params[0]?.type?.ref?.name;
     const secondType = params[1]?.type?.ref?.name;
+    const firstParamName = params[0]?.name ?? '';
 
-    // No params, returns collection → GET /
-    if (params.length === 0 && hasReturn && isCollection) {
-        return { annotation: 'GetMapping', path: '', params: [], responseWrap: 'collection' };
+    const responseWrap: string = !hasReturn ? 'void' : isCollection ? 'collection' : 'single';
+    const annotation = toAnnotation(inferHttpMethod(op));
+
+    // No params
+    if (params.length === 0) {
+        return { annotation, path: '', params: [], responseWrap };
     }
 
-    // Single ID param (primitive type), returns collection → GET /{id}
-    if (params.length === 1 && firstType && hasReturn && isCollection) {
-        const paramRefType = params[0]?.type?.ref?.$type;
-        const paramIsCollection = params[0].upper !== undefined && params[0].upper !== 1;
-        if (paramRefType === 'PrimitiveType' && !paramIsCollection) {
-            return {
-                annotation: 'GetMapping',
-                path: '/{id}',
-                params: [`@PathVariable ${firstType} ${params[0].name}`],
-                responseWrap: 'collection',
-            };
-        }
-    }
+    const firstParamIsPrimitive = params[0]?.type?.ref?.$type === 'PrimitiveType';
+    const firstParamIsCollection = params[0].upper !== undefined && params[0].upper !== 1;
+    const firstParamIsDto = params[0]?.type?.ref?.$type === 'Class' || params[0]?.type?.ref?.$type === 'DataType';
+    const secondParamIsDto = params[1]?.type?.ref?.$type === 'Class' || params[1]?.type?.ref?.$type === 'DataType';
+    const secondIsCollection = params[1]?.upper !== undefined && params[1].upper !== 1;
 
-    // Single ID param (primitive type), returns single → GET /{id}
-    if (params.length === 1 && firstType && hasReturn && !isCollection) {
-        const paramRefType = params[0]?.type?.ref?.$type;
-        const paramIsCollection = params[0].upper !== undefined && params[0].upper !== 1;
-        if (paramRefType === 'PrimitiveType' && !paramIsCollection) {
-            return {
-                annotation: 'GetMapping',
-                path: '/{id}',
-                params: [`@PathVariable ${firstType} ${params[0].name}`],
-                responseWrap: 'single',
-            };
-        }
-    }
-
-    // Single DTO param (Class or DataType), returns single → POST /
-    if (params.length === 1 && firstType && hasReturn && !isCollection) {
-        const paramRefType = params[0]?.type?.ref?.$type;
-        if (paramRefType === 'Class' || paramRefType === 'DataType') {
-            return {
-                annotation: 'PostMapping',
-                path: '',
-                params: [`@RequestBody @Valid ${firstType} ${params[0].name}`],
-                responseWrap: 'single',
-            };
-        }
-    }
-
-    // ID param + DTO param, returns single → PUT /{id}
-    if (params.length === 2 && firstType && secondType && hasReturn) {
-        const secondParamIsDto = params[1]?.type?.ref?.$type === 'Class' || params[1]?.type?.ref?.$type === 'DataType';
-        if (secondParamIsDto) {
-            return {
-                annotation: 'PutMapping',
-                path: '/{id}',
-                params: [
-                    `@PathVariable ${firstType} ${params[0].name}`,
-                    `@RequestBody @Valid ${secondType} ${params[1].name}`,
-                ],
-                responseWrap: 'single',
-            };
-        }
-    }
-
-    // ID param + DTO param, void → POST /{id} for create-like, PUT /{id} otherwise
-    if (params.length === 2 && firstType && secondType && !hasReturn) {
-        const secondParamIsDto = params[1]?.type?.ref?.$type === 'Class' || params[1]?.type?.ref?.$type === 'DataType';
-        if (secondParamIsDto) {
-            const isCreate = op.name.toLowerCase().startsWith('add') || op.name.toLowerCase().startsWith('create');
-            return {
-                annotation: isCreate ? 'PostMapping' : 'PutMapping',
-                path: '/{id}',
-                params: [
-                    `@PathVariable ${firstType} ${params[0].name}`,
-                    `@RequestBody @Valid ${secondType} ${params[1].name}`,
-                ],
-                responseWrap: 'void',
-            };
-        }
-    }
-
-    // ID param + collection param, void → POST /{id} for create-like, DELETE /{id} for delete-like, PUT otherwise
-    if (params.length === 2 && firstType && secondType && !hasReturn) {
-        const secondIsCollection = params[1].upper !== undefined && params[1].upper !== 1;
-        if (secondIsCollection) {
-            const isDelete = op.name.toLowerCase().startsWith('delete') || op.name.toLowerCase().startsWith('remove');
-            const isCreate = op.name.toLowerCase().startsWith('add') || op.name.toLowerCase().startsWith('create');
-            const annotation = isDelete ? 'DeleteMapping' : isCreate ? 'PostMapping' : 'PutMapping';
-            return {
-                annotation,
-                path: '/{id}',
-                params: [
-                    `@PathVariable ${firstType} ${params[0].name}`,
-                    `@RequestBody ${printSpringType(params[1])} ${params[1].name}`,
-                ],
-                responseWrap: 'void',
-            };
-        }
-    }
-
-    // Single ID param, void → DELETE /{id} for delete-like methods,
-    // PUT /{id} for other operations (e.g. setDefault, cancel, etc.)
-    if (params.length === 1 && firstType && !hasReturn) {
-        const isDelete = op.name.toLowerCase().startsWith('delete') || op.name.toLowerCase().startsWith('remove');
+    // Single primitive param (non-collection) → /{paramName}
+    if (params.length === 1 && firstParamIsPrimitive && !firstParamIsCollection) {
         return {
-            annotation: isDelete ? 'DeleteMapping' : 'PutMapping',
-            path: '/{id}',
-            params: [`@PathVariable ${firstType} ${params[0].name}`],
-            responseWrap: 'void',
+            annotation,
+            path: `/{${firstParamName}}`,
+            params: [`@PathVariable ${firstType} ${firstParamName}`],
+            responseWrap,
         };
     }
 
-    // No params, void → POST /
-    if (params.length === 0 && !hasReturn) {
-        return { annotation: 'PostMapping', path: '', params: [], responseWrap: 'void' };
+    // Single DTO param → /
+    if (params.length === 1 && firstParamIsDto) {
+        return {
+            annotation,
+            path: '',
+            params: [`@RequestBody @Valid ${firstType} ${firstParamName}`],
+            responseWrap,
+        };
     }
 
+    // ID + DTO → /{paramName}
+    if (params.length === 2 && firstParamIsPrimitive && secondParamIsDto) {
+        return {
+            annotation,
+            path: `/{${firstParamName}}`,
+            params: [
+                `@PathVariable ${firstType} ${firstParamName}`,
+                `@RequestBody @Valid ${secondType} ${params[1].name}`,
+            ],
+            responseWrap,
+        };
+    }
+
+    // ID + collection → /{paramName}
+    if (params.length === 2 && firstParamIsPrimitive && secondIsCollection) {
+        return {
+            annotation,
+            path: `/{${firstParamName}}`,
+            params: [
+                `@PathVariable ${firstType} ${firstParamName}`,
+                `@RequestBody ${printSpringType(params[1])} ${params[1].name}`,
+            ],
+            responseWrap,
+        };
+    }
+
+    // Fallback for unmapped signatures (e.g. multiple primitives, single collection param)
     return undefined;
 }
 
@@ -297,7 +258,7 @@ function buildControllerSource(target: ControllerTarget, delegateType: string, d
             // Fallback for unmapped signatures
             const methodParams = opParams.map(p => `${printSpringType(p)} ${p.name}`).join(', ');
             const summary = camelToHuman(op.name);
-            const fallbackAnnotation = returnType === 'void' ? 'PostMapping' : 'GetMapping';
+            const fallbackAnnotation = toAnnotation(inferHttpMethod(op));
             lines.push(`    @${fallbackAnnotation}("/${op.name}")`);
             lines.push(`    @Operation(summary = "${summary}")`);
             if ((op as any).preAuthorize) {

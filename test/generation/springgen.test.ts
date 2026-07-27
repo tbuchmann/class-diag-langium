@@ -2088,6 +2088,108 @@ describe('Item 7 – Spring Security scaffolding', () => {
         expect(doc.parseResult.parserErrors).toHaveLength(0);
         generateSpringCode(doc.parseResult.value, 'model.cdiag', tmpDir);
         const configFile = path.join(tmpDir, 'com', 'config', 'SecurityConfig.java');
-        expect(fs.existsSync(configFile)).toBe(false);
+        // SecurityConfig is always generated (with Swagger UI permitAll)
+        expect(fs.existsSync(configFile)).toBe(true);
+    });
+
+    test('SecurityConfig generates JwtTokenProvider and JwtAuthenticationFilter', async () => {
+        const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'spring-it7e-'));
+        const doc = await parse(`
+            package com {
+                package example {
+                    primitive String
+                    class Customer { name : String }
+                    interface CustomerService {
+                        findAll() : String [0..-1] {}
+                    }
+                }
+            }
+        `);
+        expect(doc.parseResult.parserErrors).toHaveLength(0);
+        generateSpringCode(doc.parseResult.value, 'model.cdiag', tmpDir);
+        const jwtTokenProvider = path.join(tmpDir, 'com', 'config', 'jwt', 'JwtTokenProvider.java');
+        const jwtAuthFilter = path.join(tmpDir, 'com', 'config', 'jwt', 'JwtAuthenticationFilter.java');
+        expect(fs.existsSync(jwtTokenProvider)).toBe(true);
+        expect(fs.existsSync(jwtAuthFilter)).toBe(true);
+        const providerContent = fs.readFileSync(jwtTokenProvider, 'utf-8');
+        expect(providerContent).toContain('generateToken');
+        expect(providerContent).toContain('validateToken');
+        const filterContent = fs.readFileSync(jwtAuthFilter, 'utf-8');
+        expect(filterContent).toContain('AUTHORIZATION');
+        expect(filterContent).toContain('Bearer ');
+    });
+
+    test('Controller uses parameter name in path variable', async () => {
+        const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'spring-it7f-'));
+        const doc = await parse(`
+            package com {
+                package example {
+                    primitive Long
+                    primitive String
+                    class Customer { name : String }
+                    @rest path="/customers"
+                    interface CustomerService {
+                        getById(customerId : Long) : Customer {}
+                    }
+                }
+            }
+        `);
+        expect(doc.parseResult.parserErrors).toHaveLength(0);
+        generateSpringCode(doc.parseResult.value, 'model.cdiag', tmpDir);
+        const content = fs.readFileSync(
+            path.join(tmpDir, 'com', 'example', 'controller', 'CustomerServiceController.java'), 'utf-8'
+        );
+        expect(content).toContain('/{customerId}');
+        expect(content).toContain('@PathVariable Long customerId');
+        expect(content).not.toContain('/{id}');
+    });
+
+    test('Explicit http annotation overrides prefix-based inference', async () => {
+        const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'spring-it7g-'));
+        const doc = await parse(`
+            package com {
+                package example {
+                    primitive Long
+                    primitive String
+                    class Customer { name : String }
+                    @rest path="/customers"
+                    interface CustomerService {
+                        getById(customerId : Long) : Customer {
+                            http POST
+                        }
+                    }
+                }
+            }
+        `);
+        expect(doc.parseResult.parserErrors).toHaveLength(0);
+        generateSpringCode(doc.parseResult.value, 'model.cdiag', tmpDir);
+        const content = fs.readFileSync(
+            path.join(tmpDir, 'com', 'example', 'controller', 'CustomerServiceController.java'), 'utf-8'
+        );
+        expect(content).toContain('@PostMapping');
+        expect(content).not.toContain('@GetMapping');
+    });
+
+    test('Non-CRUD operation defaults to POST', async () => {
+        const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'spring-it7h-'));
+        const doc = await parse(`
+            package com {
+                package example {
+                    primitive Long
+                    primitive String
+                    class Customer { name : String }
+                    @rest path="/customers"
+                    interface CustomerService {
+                        confirmEmail(token : String) {}
+                    }
+                }
+            }
+        `);
+        expect(doc.parseResult.parserErrors).toHaveLength(0);
+        generateSpringCode(doc.parseResult.value, 'model.cdiag', tmpDir);
+        const content = fs.readFileSync(
+            path.join(tmpDir, 'com', 'example', 'controller', 'CustomerServiceController.java'), 'utf-8'
+        );
+        expect(content).toContain('@PostMapping');
     });
 });
