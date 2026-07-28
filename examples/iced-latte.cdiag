@@ -76,7 +76,17 @@ package icedlatte {
     // ------------------------------------------------------------------
     // DTOs (data transfer records)
     // ------------------------------------------------------------------
+    @dto datatype CreateProductRequest {
+        name : String
+        description : String
+        price : Decimal
+        brandName: String
+        sellerName : String
+        weight: Integer
+    }
+
     @dto datatype ProductSnapshot {
+        productId: Long
         name : String
         description : String
         price : Decimal
@@ -211,6 +221,7 @@ package icedlatte {
     }
 
     @dto datatype DeliveryAddressSnapshot {
+        id : Long
         label : String
         line : String
         city : String
@@ -295,14 +306,6 @@ package icedlatte {
 
     @dto datatype GetProductReviewRequest {
         userId : Long [1..1]
-    }
-
-    @dto datatype DeleteProductReviewRequest {
-        productReviewId : Long [1..1]
-    }
-
-    @dto datatype RemoveProductFromFavoriteRequest {
-        productId : Long [1..1]
     }
 
     @dto datatype UpdateOrderStatusRequest {
@@ -724,6 +727,9 @@ package icedlatte {
 
     @rest path="/api/v1/products"
     interface ProductCatalogService {
+        addProduct(request : CreateProductRequest) : ProductSnapshot {
+            spec "Creates a new ProductInfo entity by the given details. Saves the ProductInfo entity."
+        }
         getProducts(request : GetProductsRequest) : ProductSnapshot [0..-1] {
             http GET
             spec "Retrieves a paginated list of products (PageRequest of size 'size' starting at 'page'). The 'request' parameter contains page and size. Returns a list of ProductSnapshot. Only returns products where active=true. Sorted by dateAdded descending."
@@ -735,7 +741,7 @@ package icedlatte {
             spec "Retrieves a list of all distinct brandName values from ProductInfo where active=true."
         }
         getProductsByIds(request : GetProductsByIdsRequest) : ProductSnapshot [0..-1] {
-            http POST
+            http POST "/getByIds/"
             spec "Retrieves products by a list of product IDs. The 'request' parameter contains productIds. Returns a list of ProductSnapshot for each ID found. Ignores IDs that don't exist."
         }
         getProductById(productId : Long) : ProductSnapshot {
@@ -765,13 +771,13 @@ package icedlatte {
             spec "Retrieves all orders for the user by userId. Returns a list of OrderSnapshot with id, userId, status, recipientName, recipientSurname, recipientPhone, itemsQuantity, itemsTotalPrice. Sorted by createdAt descending."
         }
         createOrder(userId : Long, request : CheckoutOrderRequest) : OrderSnapshot {
-            spec "Creates a new order from the user's shopping cart by userId. Retrieves the ShoppingCart and its ShoppingCartItems. Creates Order, OrderItem for each ShoppingCartItem, and OrderAddress from request.address. Sets status to CREATED, computes itemsQuantity and itemsTotalPrice from cart items. Closes the ShoppingCart (sets closedAt). Returns an OrderSnapshot."
+            spec "Creates a new order from the user's shopping cart by userId. Retrieves the ShoppingCart and its ShoppingCartItems with its ProductInfo entity. Creates Order, OrderItem for each ShoppingCartItem, and OrderAddress from request.address. Sets status to CREATED, computes itemsQuantity and itemsTotalPrice from cart items and product entities. Closes the ShoppingCart (sets closedAt). Returns an OrderSnapshot."
         }
         getOrderById(orderId : Long) : OrderSnapshot {
             spec "Retrieves a single order by its ID. The 'orderId' parameter is the order ID. Looks up the Order by orderId. Returns an OrderSnapshot with id, userId, status, recipientName, recipientSurname, recipientPhone, itemsQuantity, itemsTotalPrice. Throws NotFoundException if not found."
         }
         cancelOrder(orderId : Long) {
-            http POST
+            http DELETE
             spec "Cancels an order by orderId. Only allowed if status is PENDING_PAYMENT or PAID. Sets the Order's status to CANCELLED. Creates and saves an OrderStatusHistory entry with oldStatus=previous status, newStatus=CANCELLED, changedBy='system'. Does not return anything (void)."
         }
         requestRefund(orderId : Long) {
@@ -826,13 +832,14 @@ package icedlatte {
         addNewProductReview(productId : Long, request : AddProductReviewRequest) : ProductReviewSnapshot {
             spec "Adds a new review for a product by productId. The 'request' parameter contains userId, text, and rating. Checks that the user hasn't already reviewed this product. Creates a ProductReview with userId, productId, text, productRating=rating, likesCount=0, dislikesCount=0. Updates ProductInfo.averageRating and reviewsCount. Returns a ProductReviewSnapshot."
         }
-        deleteProductReview(productId : Long, request : DeleteProductReviewRequest) {
-            spec "Deletes a product review. The 'productId' parameter is the product ID, 'request' contains productReviewId. Verifies that the review belongs to the given productId. Updates ProductInfo.averageRating and reviewsCount after deletion. Also deletes all ProductReviewLike for this review."
+        deleteProductReview(productId : Long, reviewId: Long) {
+            spec "Deletes a product review. The 'productId' parameter is the product ID, 'reviewId' is the review ID. Verifies that the review belongs to the given productId. Updates ProductInfo.averageRating and reviewsCount after deletion. Also deletes all ProductReviewLike for this review."
         }
         getProductReview(productId : Long, request : GetProductReviewRequest) : ProductReviewSnapshot {
             spec "Retrieves the user's review for a product. The 'productId' parameter is the product ID, 'request' contains userId. Returns a ProductReviewSnapshot. Returns null if the user hasn't reviewed this product."
         }
         getUserReviews(userId : Long) : ProductReviewSnapshot [0..-1] {
+            http GET "/user/"
             spec "Retrieves all reviews written by a user by userId. Returns a list of ProductReviewSnapshot. Sorted by createdAt descending."
         }
         addProductReviewLike(productId : Long, request : AddProductReviewLikeRequest) {
@@ -848,16 +855,16 @@ package icedlatte {
         addListOfFavoriteProducts(userId : Long, productIds : Long [0..-1]) {
             spec "Adds products to the user's favorites list by userId. Creates a FavoriteListEntity if it doesn't exist for the user. Creates a FavoriteItemEntity for each productId that isn't already in the list. Updates updatedAt."
         }
-        removeProductFromFavorite(userId : Long, request : RemoveProductFromFavoriteRequest) {
+        removeProductFromFavorite(userId : Long, productId : Long) {
             http DELETE
-            spec "Removes a product from the user's favorites list by userId. The 'request' parameter contains productId. Deletes the FavoriteItemEntity. Updates updatedAt on the FavoriteListEntity."
+            spec "Removes product with given 'productId' from the user's favorites list by userId. Deletes the FavoriteItemEntity. Updates updatedAt on the FavoriteListEntity."
         }
     }
 
     @rest path="/api/v1/auth"
     interface AuthenticationService {
         register(request : RegisterRequest) : AuthResponse {
-            spec "Registers a new user account. The 'request' parameter contains email, password, firstName, lastName. Creates a UserEntity with email=request.email, password (BCrypt-hashed), firstName=request.firstName, lastName=request.lastName, enabled=false, oauthUser=false. Creates a UserGrantedAuthority with authority=USER. Creates an AuthSessionEntity and generates JWT access and refresh tokens. Returns an AuthResponse with accessToken, refreshToken, userId."
+            spec "Registers a new user account. The 'request' parameter contains email, password, firstName, lastName. Creates a UserEntity with email=request.email, password (BCrypt-hashed), firstName=request.firstName, lastName=request.lastName, enabled=false, oauthUser=false. Creates a UserGrantedAuthority with authority=USER. Creates an AuthSessionEntity and uses the JwtTokenProvider to generate JWT access and refresh tokens. Returns an AuthResponse with accessToken, refreshToken, userId."
         }
         confirmEmail(token : String) {
             http POST
@@ -923,10 +930,11 @@ package icedlatte {
             spec "Creates a WebSocket connection ticket for real-time chat by userId. Returns a unique ticket string that can be used to authenticate the WebSocket connection."
         }
         getSupportChatMessages(conversationId : Long) : SupportMessageSnapshot [0..-1] {
+            http GET "/messages/"
             spec "Retrieves messages for a support conversation by conversationId. Returns a list of SupportMessageSnapshot with id, conversationId, senderType, body, deliveryStatus, createdAt. Sorted by createdAt ascending."
         }
         sendSupportChatMessage(conversationId : Long, request : SendSupportChatMessageRequest) : SupportMessageSnapshot {
-            http POST
+            http POST "/messages/"
             spec "Sends a new message in a support conversation by conversationId. The 'request' parameter contains message. Creates a SupportMessageEntity with senderType=CUSTOMER, body=request.message, normalizedBody=request.message, deliveryStatus=PENDING. Updates the SupportConversationEntity.lastMessageAt. Returns a SupportMessageSnapshot with id, conversationId, senderType, body, deliveryStatus, createdAt."
         }
     }

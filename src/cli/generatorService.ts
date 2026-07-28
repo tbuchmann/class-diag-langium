@@ -461,13 +461,22 @@ export function generateService(
         `    private final ${e}Repository ${toCamel(e)}Repository;`
     ).join('\n');
 
-    const constructorParams = entities.map(e =>
-        `${e}Repository ${toCamel(e)}Repository`
-    ).join(', ');
+    // Check if this is an authentication-related service
+    const needsJwtTokenProvider = /auth/i.test(iface.name);
 
-    const constructorAssignments = entities.map(e =>
-        `        this.${toCamel(e)}Repository = ${toCamel(e)}Repository;`
-    ).join('\n');
+    const allFields = needsJwtTokenProvider
+        ? repoFields + (repoFields ? '\n' : '') + '    private final JwtTokenProvider jwtTokenProvider;'
+        : repoFields;
+
+    const constructorParams = [
+        ...entities.map(e => `${e}Repository ${toCamel(e)}Repository`),
+        ...(needsJwtTokenProvider ? ['JwtTokenProvider jwtTokenProvider'] : []),
+    ].join(', ');
+
+    const constructorAssignments = [
+        ...entities.map(e => `        this.${toCamel(e)}Repository = ${toCamel(e)}Repository;`),
+        ...(needsJwtTokenProvider ? ['        this.jwtTokenProvider = jwtTokenProvider;'] : []),
+    ].join('\n');
 
     const hasTransactional = operations.some(op =>
         isWriteOperation(op) || op.description !== undefined
@@ -532,6 +541,9 @@ export function generateService(
         lines.push('import java.util.List;');
     }
     lines.push(`import ${qualifiedPkg}.${iface.name};`);
+    if (needsJwtTokenProvider) {
+        lines.push(`import ${qualifiedPkg}.config.jwt.JwtTokenProvider;`);
+    }
     for (const e of entities) {
         lines.push(`import ${qualifiedPkg}.domain.${e};`);
         lines.push(`import ${qualifiedPkg}.repository.${e}Repository;`);
@@ -555,8 +567,8 @@ export function generateService(
     lines.push('@Service');
     lines.push(`public class ${iface.name}Impl implements ${iface.name} {`);
     lines.push('');
-    if (repoFields) {
-        lines.push(repoFields);
+    if (allFields) {
+        lines.push(allFields);
         lines.push('');
         lines.push(`    public ${iface.name}Impl(${constructorParams}) {`);
         lines.push(constructorAssignments);

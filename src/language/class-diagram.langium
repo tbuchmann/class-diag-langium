@@ -30,7 +30,7 @@ Property returns TypedElement:
 
 Operation returns TypedElement:
     {infer Operation} (vis=VisibilityKind)? (static?='static')? (abstract?='abstract')? name=ID '(' (params+=Parameter (',' params+=Parameter)*)? ')' (':' type=[Type:ID] ('[' lower=INT '..' upper=INT ']')?)? '{'
-    ('http' httpMethod=HttpMethod)?
+    ('http' httpMethod=HttpMethod (httpPath=STRING)?)?
     ('preAuthorize' preAuthorize=STRING)?
     ('spec' description=STRING)?
     ('impl' target=ID content=IMPL_BODY)?

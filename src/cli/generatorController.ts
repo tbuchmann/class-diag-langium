@@ -56,10 +56,14 @@ function getHttpMapping(
 
     const responseWrap: string = !hasReturn ? 'void' : isCollection ? 'collection' : 'single';
     const annotation = toAnnotation(inferHttpMethod(op));
+    // When httpPath is specified, prepend it to the inferred path
+    const httpPath = op.httpPath ? op.httpPath.replace(/\/+$/, '') : '';
+    const prefix = httpPath ? httpPath : '';
+    const buildPath = (suffix: string) => prefix ? (suffix ? `${prefix}${suffix}` : prefix) : suffix;
 
     // No params
     if (params.length === 0) {
-        return { annotation, path: '', params: [], responseWrap };
+        return { annotation, path: buildPath(''), params: [], responseWrap };
     }
 
     const firstParamIsPrimitive = params[0]?.type?.ref?.$type === 'PrimitiveType';
@@ -72,7 +76,7 @@ function getHttpMapping(
     if (params.length === 1 && firstParamIsPrimitive && !firstParamIsCollection) {
         return {
             annotation,
-            path: `/{${firstParamName}}`,
+            path: buildPath(`/{${firstParamName}}`),
             params: [`@PathVariable ${firstType} ${firstParamName}`],
             responseWrap,
         };
@@ -82,7 +86,7 @@ function getHttpMapping(
     if (params.length === 1 && firstParamIsDto) {
         return {
             annotation,
-            path: '',
+            path: buildPath(''),
             params: [`@RequestBody @Valid ${firstType} ${firstParamName}`],
             responseWrap,
         };
@@ -92,7 +96,7 @@ function getHttpMapping(
     if (params.length === 2 && firstParamIsPrimitive && secondParamIsDto) {
         return {
             annotation,
-            path: `/{${firstParamName}}`,
+            path: buildPath(`/{${firstParamName}}`),
             params: [
                 `@PathVariable ${firstType} ${firstParamName}`,
                 `@RequestBody @Valid ${secondType} ${params[1].name}`,
@@ -105,7 +109,7 @@ function getHttpMapping(
     if (params.length === 2 && firstParamIsPrimitive && secondIsCollection) {
         return {
             annotation,
-            path: `/{${firstParamName}}`,
+            path: buildPath(`/{${firstParamName}}`),
             params: [
                 `@PathVariable ${firstType} ${firstParamName}`,
                 `@RequestBody ${printSpringType(params[1])} ${params[1].name}`,
@@ -259,7 +263,9 @@ function buildControllerSource(target: ControllerTarget, delegateType: string, d
             const methodParams = opParams.map(p => `${printSpringType(p)} ${p.name}`).join(', ');
             const summary = camelToHuman(op.name);
             const fallbackAnnotation = toAnnotation(inferHttpMethod(op));
-            lines.push(`    @${fallbackAnnotation}("/${op.name}")`);
+            const httpPath = op.httpPath ? op.httpPath.replace(/\/+$/, '') : '';
+            const fallbackPath = httpPath ? `${httpPath}/${op.name}` : `/${op.name}`;
+            lines.push(`    @${fallbackAnnotation}("${fallbackPath}")`);
             lines.push(`    @Operation(summary = "${summary}")`);
             if ((op as any).preAuthorize) {
                 lines.push(`    @PreAuthorize(${(op as any).preAuthorize})`);
